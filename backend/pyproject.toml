@@ -1,0 +1,29 @@
+[project]
+name = "repo-cartographer-backend"
+version = "0.1.0"
+description = "Onboard to unfamiliar code in minutes, not days, with answers you can verify."
+requires-python = ">=3.13"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "chromadb>=1.5.9",
+    "fastapi>=0.143.0",
+    "gitpython>=3.2.0",
+    "groq>=1.7.0",
+    "pathspec>=1.1.1",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.4",
+    "sse-starlette>=3.5.0",
+    "tiktoken>=0.14.0",
+    "tree-sitter>=0.26.0",
+    "tree-sitter-language-pack>=1.21.0",
+    "uvicorn[standard]>=0.54.0",
+    "voyageai>=0.5.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.17.0",
+]
