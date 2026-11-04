@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     max_file_bytes: int = Field(500_000, ge=1)
     max_repo_source_bytes: int = Field(25_000_000, ge=1)
     max_chunks_per_repo: int = Field(15_000, ge=1)
+    git_timeout_seconds: int = Field(120, gt=0)
+    clone_timeout_seconds: int = Field(300, gt=0)
+    git_max_concurrency: int = Field(2, ge=1)
+    max_remote_repo_size_mb: int = Field(500, gt=0)
 
     @model_validator(mode="after")
     def validate_pool(self):

@@ -1,3 +1,4 @@
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
@@ -10,6 +11,11 @@ from app.config.settings import Settings
 from app.core.logging import bind_context, configure_logging, unbind_context
 from app.db.migrate import MigrationRunner
 from app.db.pool import Database
+
+if sys.platform == "win32":
+    import asyncio
+
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

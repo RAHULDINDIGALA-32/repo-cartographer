@@ -17,18 +17,60 @@ class RepoRef(ValueModel):
     url: str
     default_branch: str | None = None
 
+    @classmethod
+    def parse(cls, value: str) -> RepoRef:
+        import re
+        from urllib.parse import urlparse
+
+        raw = value.strip()
+        if not raw or any(ord(c) < 32 for c in raw) or any(c in raw for c in "\\\"';&|$`"):
+            raise InvalidRepoUrlError("Repository URL is empty or contains invalid characters")
+        owner = name = None
+        if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", raw):
+            owner, name = raw.split("/")
+        elif raw.startswith("git@github.com:"):
+            owner, name = raw[len("git@github.com:") :].split("/", 1)
+        else:
+            parsed = urlparse(raw if "://" in raw else f"https://{raw}")
+            host = (parsed.hostname or "").lower()
+            if host == "www.github.com":
+                host = "github.com"
+            if (
+                host != "github.com"
+                or parsed.password
+                or (parsed.username and parsed.username != "git")
+            ):
+                raise InvalidRepoUrlError("Only public GitHub repositories are supported")
+            if parsed.scheme not in ("https", "ssh"):
+                raise InvalidRepoUrlError("Only HTTPS or GitHub SSH repository URLs are supported")
+            if parsed.scheme == "ssh" and parsed.username not in (None, "git"):
+                raise InvalidRepoUrlError("Only the git SSH user is supported")
+            parts = parsed.path.strip("/").split("/")
+            if len(parts) < 2:
+                raise InvalidRepoUrlError("Repository owner and name are required")
+            owner, name = parts[0], parts[1]
+        name = name[:-4] if name.endswith(".git") else name
+        allowed = re.compile(r"^[A-Za-z0-9_.-]+$")
+        if (
+            not owner
+            or not name
+            or not allowed.fullmatch(owner)
+            or not allowed.fullmatch(name)
+            or ".." in owner
+            or ".." in name
+        ):
+            raise InvalidRepoUrlError("Repository owner and name are invalid")
+        owner, name = owner.lower(), name.lower()
+        return cls.model_construct(owner=owner, name=name, url=f"https://github.com/{owner}/{name}")
+
     @model_validator(mode="after")
     def normalize(self):
-        raw = self.url.strip().rstrip("/")
-        if raw.endswith(".git"):
-            raw = raw[:-4]
-        prefix = "https://github.com/"
-        if not raw.lower().startswith(prefix) or len(raw.split("/")) != 5:
-            raise InvalidRepoUrlError("Only public GitHub repository URLs are supported")
-        owner, name = raw[len(prefix) :].split("/")
-        if owner != self.owner or name != self.name or not owner or not name:
+        parsed = self.parse(self.url)
+        if parsed.owner != self.owner.lower() or parsed.name != self.name.lower():
             raise InvalidRepoUrlError("Repository URL and owner/name do not match")
-        object.__setattr__(self, "url", f"{prefix}{owner}/{name}")
+        object.__setattr__(self, "owner", parsed.owner)
+        object.__setattr__(self, "name", parsed.name)
+        object.__setattr__(self, "url", parsed.url)
         return self
 
 
@@ -48,6 +90,72 @@ class SourceFile(ValueModel):
                 "path must be relative, normalized with forward slashes, and contain no .."
             )
         return self
+
+
+class Repo(ValueModel):
+    id: int
+    ref: RepoRef
+    default_branch: str | None = None
+    indexed_sha: str | None = None
+    status: Literal["registered", "indexing", "ready", "failed"]
+    last_error: str | None = None
+    last_checked_at: object | None = None
+    last_queried_at: object | None = None
+    created_at: object | None = None
+    updated_at: object | None = None
+
+
+class RepoRegistration(ValueModel):
+    repo: Repo
+    already_existed: bool = False
+
+
+class RemoteInfo(ValueModel):
+    default_branch: str
+    head_sha: str
+
+
+class RemoteCheck(ValueModel):
+    remote_sha: str
+    indexed_sha: str | None = None
+    is_stale: bool
+    default_branch: str
+
+
+class FetchResult(ValueModel):
+    head_sha: str
+    cloned: bool
+    previous_head_sha: str | None = None
+    default_branch: str
+
+
+class FileEntry(ValueModel):
+    path: str
+    file_hash: str
+    size_bytes: int
+    language: str
+
+
+class FilterDecision(ValueModel):
+    include: bool
+    reason: str | None = None
+
+
+class SkipSummary(ValueModel):
+    reason: str
+    count: int
+    total_bytes: int
+
+
+class ScanReport(ValueModel):
+    repo_id: int
+    head_sha: str
+    entries: list[FileEntry]
+    skipped: list[SkipSummary]
+    total_included_files: int
+    total_included_bytes: int
+    scan_duration_ms: int
+    skipped_paths: list[dict[str, str | int]] | None = None
 
 
 SymbolType = Literal[

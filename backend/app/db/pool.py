@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from pgvector.psycopg import register_vector_async
-from psycopg import AsyncConnection
+from psycopg import AsyncConnection, Error, errors
 from psycopg_pool import AsyncConnectionPool
 
 from app.config.settings import Settings
@@ -33,7 +33,14 @@ class Database:
         await self.pool.open(wait=True)
 
     async def _configure(self, conn: AsyncConnection):
-        await register_vector_async(conn)
+        # The migration command opens a pool before migration 0000 creates the
+        # extension.  Registration is therefore best-effort during bootstrap;
+        # normal application pools are opened after migrations exist.
+        try:
+            await register_vector_async(conn)
+        except (errors.UndefinedObject, Error) as exc:
+            if "vector type not found" not in str(exc).lower():
+                raise
 
     async def close(self):
         if self.pool:

@@ -5,7 +5,7 @@ description = "Onboard to unfamiliar code in minutes, not days, with answers you
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.143.0",
-    "gitpython>=3.2.0",
+    "httpx>=0.28.1",
     "pathspec>=1.1.1",
     "psycopg[binary,pool]>=3.2.0",
     "pgvector>=0.3.0",
@@ -45,6 +45,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_b0_schema_constraints.py" = ["E501", "B017"]
 
 [dependency-groups]
 dev = [

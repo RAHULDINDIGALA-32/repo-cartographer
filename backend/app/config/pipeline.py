@@ -30,6 +30,8 @@ class PipelineConfig(BaseModel):
     generator_model: str = "claude-sonnet-4-5"
     max_answer_tokens: int = Field(1000, gt=0)
     poll_interval_minutes: int = Field(15, gt=0)
+    exclude_globs: list[str] = []
+    include_globs: list[str] = []
 
     @model_validator(mode="after")
     def validate_cross_fields(self):

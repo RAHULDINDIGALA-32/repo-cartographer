@@ -19,3 +19,5 @@ analyzer_model: claude-3-5-haiku-latest
 generator_model: claude-sonnet-4-5
 max_answer_tokens: 1000
 poll_interval_minutes: 15
+exclude_globs: []
+include_globs: []
