@@ -2,23 +2,49 @@
 name = "repo-cartographer-backend"
 version = "0.1.0"
 description = "Onboard to unfamiliar code in minutes, not days, with answers you can verify."
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
-    "aiosqlite>=0.22.1",
-    "chromadb>=1.5.9",
     "fastapi>=0.143.0",
     "gitpython>=3.2.0",
-    "groq>=1.7.0",
     "pathspec>=1.1.1",
+    "psycopg[binary,pool]>=3.2.0",
+    "pgvector>=0.3.0",
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.0",
     "sse-starlette>=3.5.0",
+    "structlog>=24.0.0",
+    "typer>=0.12.0",
     "tiktoken>=0.14.0",
     "tree-sitter>=0.26.0",
     "tree-sitter-language-pack>=1.21.0",
     "uvicorn[standard]>=0.54.0",
     "voyageai>=0.5.0",
 ]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+cartographer = "app.cli:app"
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
 
 [dependency-groups]
 dev = [

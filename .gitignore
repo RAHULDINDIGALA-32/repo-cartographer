@@ -6,6 +6,9 @@ __pycache__/
 # C extensions
 *.so
 
+# Dev files
+docs
+
 # Distribution / packaging
 .Python
 build/
@@ -151,6 +154,10 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
+data/
+docker/volumes/
 .envrc
 .venv
 env/
