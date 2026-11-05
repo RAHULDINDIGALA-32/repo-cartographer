@@ -11,6 +11,12 @@ class PipelineConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     chunker: str = "ast"
     max_chunk_tokens: int = Field(800, gt=0)
+    min_chunk_tokens: int = Field(50, ge=0)
+    chunk_overlap_lines: int = Field(3, ge=0)
+    max_parse_error_ratio: float = Field(0.3, ge=0, le=1)
+    max_chunks_per_file: int = Field(400, gt=0)
+    tokenizer: str = "cl100k_base"
+    parse_timeout_ms: int = Field(2000, gt=0)
     contextual_headers: bool = True
     llm_chunk_summaries: bool = False
     embedder: str = "voyage-code"
@@ -35,6 +41,8 @@ class PipelineConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_cross_fields(self):
+        if self.min_chunk_tokens >= self.max_chunk_tokens:
+            raise ValueError("min_chunk_tokens must be less than max_chunk_tokens")
         expected = {"voyage-code": 1024}.get(self.embedder)
         if expected is not None and self.embedding_dim != expected:
             raise ValueError(f"{self.embedder} requires embedding_dim={expected}")

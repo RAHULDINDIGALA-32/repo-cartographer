@@ -1,5 +1,11 @@
 chunker: ast
 max_chunk_tokens: 800
+min_chunk_tokens: 50
+chunk_overlap_lines: 3
+max_parse_error_ratio: 0.3
+max_chunks_per_file: 400
+tokenizer: cl100k_base
+parse_timeout_ms: 2000
 contextual_headers: true
 llm_chunk_summaries: false
 embedder: voyage-code

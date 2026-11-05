@@ -45,6 +45,11 @@ def _make(kind: str, name: str, deps: dict[str, Any]):
 
 
 def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -> Pipeline:
+    from app.ingestion.chunkers import AstChunker, FixedChunker
+
+    if not REGISTRY["chunker"]:
+        register("chunker", "ast", AstChunker)
+        register("chunker", "fixed", FixedChunker)
     deps = deps or {}
     names = {
         "chunker": config.chunker,
@@ -53,5 +58,8 @@ def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -
         "fusion": config.fusion,
         "reranker": config.reranker,
     }
-    stages = {kind: _make(kind, name, deps) for kind, name in names.items()}
+    stages = {
+        kind: _make(kind, name, {**deps, "config": config} if kind == "chunker" else deps)
+        for kind, name in names.items()
+    }
     return Pipeline(stages)

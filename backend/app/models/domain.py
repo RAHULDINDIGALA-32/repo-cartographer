@@ -184,6 +184,10 @@ class Chunk(ValueModel):
     embed_text: str | None = None
     search_text: str | None = None
     content_hash: str | None = None
+    symbols: list[str] = Field(default_factory=list)
+    part_index: int | None = Field(default=None, ge=1)
+    part_count: int | None = Field(default=None, ge=1)
+    fallback_reason: str | None = None
 
     @model_validator(mode="after")
     def valid_range(self):
