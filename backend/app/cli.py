@@ -19,6 +19,8 @@ from app.db.migrate import MigrationRunner
 from app.db.pool import Database
 from app.ingestion.chunkers import AstChunker, FixedChunker
 from app.ingestion.chunkers.ast import tree_dump
+from app.ingestion.chunkers.tokens import tokenizer_identity
+from app.ingestion.indexer import Indexer, IndexOptions
 from app.repos_git.manager import RepoManager
 
 app = typer.Typer(help="Repo Cartographer backend CLI")
@@ -30,7 +32,9 @@ repo_app = typer.Typer()
 app.add_typer(repo_app, name="repo")
 chunks_app = typer.Typer()
 app.add_typer(chunks_app, name="chunks")
-for name in ("index", "ask", "eval"):
+index_app = typer.Typer()
+app.add_typer(index_app, name="index")
+for name in ("ask", "eval"):
     app.add_typer(typer.Typer(), name=name)
 
 
@@ -131,7 +135,16 @@ def doctor():
             "embedding_dim": False,
             "anthropic_key": bool(s.anthropic_api_key.get_secret_value()),
             "voyage_key": bool(s.voyage_api_key.get_secret_value()),
+            "tokenizer": False,
         }
+        try:
+            mode = tokenizer_identity(
+                load_pipeline().tokenizer, require_exact=s.require_exact_tokenizer
+            )
+            checks["tokenizer"] = mode != "tok-estimate" or not s.require_exact_tokenizer
+            typer.echo(f"INFO tokenizer_mode={mode}")
+        except RuntimeError:
+            pass
         try:
             s.data_dir.mkdir(parents=True, exist_ok=True)
             checks["data_dir"] = s.data_dir.is_dir()
@@ -315,6 +328,138 @@ def _chunker(config: PipelineConfig, name: str):
     return AstChunker(selected) if name == "ast" else FixedChunker(selected)
 
 
+def make_indexer(s, d):
+    return Indexer(repo_manager(s, d), s, load_pipeline())
+
+
+@index_app.command("estimate")
+def index_estimate(repo_id: int, chunker: str | None = typer.Option(None, "--chunker")):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            typer.echo(
+                json.dumps(
+                    await make_indexer(s, d).estimate(repo_id, chunker=chunker),
+                    default=str,
+                    sort_keys=True,
+                )
+            )
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@index_app.command("run")
+def index_run(
+    repo_id: int,
+    fetch: bool = typer.Option(False, "--fetch"),
+    yes: bool = typer.Option(False, "--yes"),
+    chunker: str | None = typer.Option(None, "--chunker"),
+):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            service = make_indexer(s, d)
+            estimate = await service.estimate(repo_id, chunker=chunker)
+            if not yes:
+                typer.echo(json.dumps(estimate, default=str, sort_keys=True))
+                if not typer.confirm("Proceed with indexing?"):
+                    raise typer.Abort()
+            result = await service.index_repo(repo_id, IndexOptions(fetch=fetch, chunker=chunker))
+            typer.echo(json.dumps(result, default=str, sort_keys=True))
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@index_app.command("status")
+def index_status(repo_id: int):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            typer.echo(
+                json.dumps(await make_indexer(s, d).status(repo_id), default=str, sort_keys=True)
+            )
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@index_app.command("runs")
+def index_runs(repo_id: int, json_output: bool = typer.Option(False, "--json")):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            values = await make_indexer(s, d).runs(repo_id)
+            typer.echo(
+                json.dumps(values, default=str, sort_keys=True)
+                if json_output
+                else "\n".join(str(value) for value in values)
+            )
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@index_app.command("verify")
+def index_verify(repo_id: int):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            result = await make_indexer(s, d).verify(repo_id)
+            typer.echo(json.dumps(result, default=str, sort_keys=True))
+            if not result["ok"]:
+                raise typer.Exit(1)
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@index_app.command("reset")
+def index_reset(repo_id: int, confirm: bool = typer.Option(False, "--confirm")):
+    if not confirm:
+        raise typer.BadParameter("pass --confirm to reset the index")
+
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            await make_indexer(s, d).reset(repo_id)
+            typer.echo("Index reset")
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
 async def _chunk_inventory(
     repo_id: int, name: str, language: str | None = None, path_glob: str | None = None
 ):
@@ -434,6 +579,56 @@ def chunks_show(repo_id: int, path: str, full: bool = typer.Option(False, "--ful
                     typer.echo(chunk.text if full else " ".join(chunk.text.strip().split())[:240])
                 return
             raise typer.BadParameter(f"file not found in scan: {path}")
+        except AppError as exc:
+            cli_error(exc)
+
+    run_async(run())
+
+
+@chunks_app.command("verify")
+def chunks_verify(repo_id: int, chunker: str = typer.Option("ast", "--chunker")):
+    async def run():
+        violations: list[dict[str, str | int]] = []
+        try:
+            items, _ = await _chunk_inventory(repo_id, chunker)
+            config = load_pipeline()
+            for source, chunks in items:
+                lines = source.content.splitlines(keepends=True)
+                covered = set()
+                previous_end = 0
+                for chunk in chunks:
+                    expected = "".join(lines[chunk.start_line - 1 : chunk.end_line])
+                    if chunk.text != expected:
+                        violations.append(
+                            {
+                                "path": source.path,
+                                "reason": "slice_mismatch",
+                                "line": chunk.start_line,
+                            }
+                        )
+                    if chunk.start_line < previous_end + 1 and chunk.start_line not in covered:
+                        violations.append(
+                            {"path": source.path, "reason": "overlap", "line": chunk.start_line}
+                        )
+                    if chunk.token_count > config.max_chunk_tokens:
+                        violations.append(
+                            {"path": source.path, "reason": "over_budget", "line": chunk.start_line}
+                        )
+                    covered.update(range(chunk.start_line, chunk.end_line + 1))
+                    previous_end = max(previous_end, chunk.end_line)
+                for line_no, line in enumerate(lines, 1):
+                    if line.strip() and line_no not in covered:
+                        violations.append(
+                            {"path": source.path, "reason": "coverage_gap", "line": line_no}
+                        )
+            typer.echo(
+                json.dumps(
+                    {"ok": not violations, "files": len(items), "violations": violations},
+                    sort_keys=True,
+                )
+            )
+            if violations:
+                raise typer.Exit(1)
         except AppError as exc:
             cli_error(exc)
 

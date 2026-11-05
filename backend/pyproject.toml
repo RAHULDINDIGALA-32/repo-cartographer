@@ -38,6 +38,7 @@ include = ["app*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["network: requires live provider credentials and network access"]
 
 [tool.ruff]
 line-length = 100
@@ -48,8 +49,12 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/test_b0_schema_constraints.py" = ["E501", "B017"]
-"app/cli.py" = ["E501"]
+"app/cli.py" = ["E501", "E702"]
 "app/ingestion/chunkers/*.py" = ["E501"]
+"app/ingestion/*.py" = ["E501"]
+"app/providers/*.py" = ["E501"]
+"tests/test_b3_primitives.py" = ["E501"]
+"tests/test_b3_writer.py" = ["E501"]
 
 [dependency-groups]
 dev = [

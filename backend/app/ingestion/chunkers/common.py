@@ -214,6 +214,8 @@ def merge_small(
                 previous.end_line + 1 >= chunk.start_line
                 and previous.token_count < config.min_chunk_tokens
                 and chunk.token_count < config.min_chunk_tokens
+                and previous.symbol_type not in {"class", "class_skeleton"}
+                and chunk.symbol_type not in {"class", "class_skeleton"}
                 and count_tokens(combined, config.tokenizer) <= config.max_chunk_tokens
             ):
                 names = list(dict.fromkeys(previous.symbols + chunk.symbols))

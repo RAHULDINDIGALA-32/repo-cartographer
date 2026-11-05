@@ -8,6 +8,8 @@ __pycache__/
 
 # Dev files
 docs
+*/.test-data
+*/.tree-sitter-cache
 
 # Distribution / packaging
 .Python

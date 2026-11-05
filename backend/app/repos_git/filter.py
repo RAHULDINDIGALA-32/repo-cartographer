@@ -123,6 +123,7 @@ LANGUAGES = {
     ".cs": "C#",
     ".rb": "Ruby",
     ".php": "PHP",
+    ".sol": "Solidity",
     ".dockerfile": "Dockerfile",
 }
 

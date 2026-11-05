@@ -32,7 +32,7 @@ Known limitations: public GitHub HTTPS repositories only in production, default 
 
 ## Chunking
 
-B2 adds two read-only chunkers. `ast` uses tree-sitter for Python, TypeScript/TSX, and JavaScript/JSX; heading-aware sections for Markdown; whole-file or blank-line blocks for configuration; and a deterministic generic fallback for other languages. Oversized classes become bounded skeleton/member chunks, oversized functions split at line-safe boundaries, and tiny adjacent chunks merge when they fit. `fixed` is the structure-blind sliding line-window control.
+B2 adds two read-only chunkers. `ast` uses tree-sitter for Python, TypeScript/TSX, JavaScript/JSX, and Solidity when the installed grammar is available; heading-aware sections for Markdown; whole-file or blank-line blocks for configuration; and a deterministic generic fallback for other languages. Oversized classes become bounded skeleton/member chunks, oversized functions split at line-safe boundaries, and tiny adjacent chunks merge when they fit. `fixed` is the structure-blind sliding line-window control.
 
 The default budget is `max_chunk_tokens: 800`, with `min_chunk_tokens: 50` and three-line overlap only for the fixed/fallback line splitter. Counts use the configured tiktoken encoding as an approximation for the embedding provider. Missing grammar/tokenizer data is handled as an explicit fallback so an offline index run does not fail.
 
@@ -53,4 +53,23 @@ Final B2 demo summary:
 | avatar-nft-minter-bot-chain | 41 | 148 | 79 / 798 / 800 | 55 | 0 | 1.9 s |
 
 The low-token chunks are mostly short reStructuredText release-note sections in Flask and import/config fragments in the NFT repository. They are retained for exact line coverage and citation honesty; they are candidates for future language-specific merging rather than dropped content. Tree-sitter process-level isolation remains out of scope, as specified by B2.
+
+## Indexing
+
+B3 turns chunks into searchable Postgres rows through this flow: scan → chunk → deterministic enrichment → cross-repository embedding reuse lookup → bounded Voyage batches → atomic per-file writes. The enrichment header is deterministic and is kept separate from the cited chunk text:
+
+```text
+path: src/example.py
+language: Python
+symbol: Parser.parse (method, part 1/2)
+lines: 40-66
+
+<exact source slice>
+```
+
+`content_hash` is SHA-256 over the exact header-plus-source embedding text. A vector is reusable only when both `content_hash` and `embedder_version` match, including across repositories. `index estimate` performs the full scan/chunk/enrich/reuse analysis without making provider calls; use it before `index run` to size token spend and rate-limit time. `index run` writes each file atomically, advances `indexed_sha` only after the complete run succeeds, and records retry/throttle/fallback statistics.
+
+The embedding provider receives repository source text and deterministic metadata. This project indexes public repositories only; users should treat source text as leaving the local machine when Voyage embedding is enabled. Provider keys are never logged or committed. The implementation follows Voyage’s current embeddings API contract for document input, explicit `output_dimension`, and the configured model’s batch limits: [Voyage embeddings API](https://docs.voyageai.com/reference/embeddings-api).
+
+Use `index verify <repo_id>` before B4 retrieval work. It checks embeddings, versions, generated full-text search data, file/chunk referential integrity, line ranges, and sub-minimum chunk counts. B3 does not create a vector index; B4 owns that benchmark and decision.
 

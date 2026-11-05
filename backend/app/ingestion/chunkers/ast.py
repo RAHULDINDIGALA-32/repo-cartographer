@@ -20,6 +20,7 @@ from .common import (
     make_chunk,
     merge_small,
 )
+from .tokens import tokenizer_identity
 
 log = logging.getLogger(__name__)
 _thread_state = threading.local()
@@ -29,6 +30,7 @@ _SUPPORTED = {
     "TSX": "tsx",
     "JavaScript": "javascript",
     "JSX": "javascript",
+    "Solidity": "solidity",
 }
 _DEFINITION_TYPES = {
     "function_definition": ("function", "function"),
@@ -41,6 +43,15 @@ _DEFINITION_TYPES = {
     "interface_declaration": ("class", "class"),
     "type_alias_declaration": ("class", "class"),
     "enum_declaration": ("class", "class"),
+    "contract_declaration": ("class", "class"),
+    "interface_declaration_solidity": ("class", "class"),
+    "library_declaration": ("class", "class"),
+    "function_definition_solidity": ("method", "method"),
+    "modifier_definition": ("method", "method"),
+    "constructor_definition": ("method", "method"),
+    "event_definition": ("class", "class"),
+    "struct_definition": ("class", "class"),
+    "enum_definition": ("class", "class"),
 }
 
 
@@ -120,9 +131,10 @@ def _definition(node) -> _NodeInfo | None:
     for candidate in _descendants(node):
         if candidate.type in _DEFINITION_TYPES:
             symbol_type, _ = _DEFINITION_TYPES[candidate.type]
-            return _NodeInfo(
-                candidate, candidate, _name(candidate), symbol_type, *_line_range(node)
+            symbol = (
+                "constructor" if candidate.type == "constructor_definition" else _name(candidate)
             )
+            return _NodeInfo(candidate, candidate, symbol, symbol_type, *_line_range(node))
     if node.type in {"lexical_declaration", "variable_declaration"}:
         if any(
             candidate.type in {"arrow_function", "function_expression"}
@@ -141,7 +153,14 @@ def _definition(node) -> _NodeInfo | None:
 
 
 def _is_container(info: _NodeInfo) -> bool:
-    return info.base.type in {"class_definition", "class_declaration", "abstract_class_declaration"}
+    return info.base.type in {
+        "class_definition",
+        "class_declaration",
+        "abstract_class_declaration",
+        "contract_declaration",
+        "interface_declaration_solidity",
+        "library_declaration",
+    }
 
 
 def _children_definitions(
@@ -155,7 +174,12 @@ def _children_definitions(
     body = node.child_by_field_name("body")
     if body is None:
         for candidate in node.named_children:
-            if candidate.type in {"block", "class_body", "class_body_declaration_list"}:
+            if candidate.type in {
+                "block",
+                "class_body",
+                "class_body_declaration_list",
+                "contract_body",
+            }:
                 body = candidate
                 break
     if body is None:
@@ -211,9 +235,14 @@ def _tokens(text: str, config: PipelineConfig) -> int:
 class AstChunker:
     name = "ast"
 
-    def __init__(self, config: PipelineConfig | None = None, **_: object):
+    def __init__(
+        self,
+        config: PipelineConfig | None = None,
+        require_exact_tokenizer: bool = False,
+        **_: object,
+    ):
         self.config = config or PipelineConfig()
-        self.version = f"ast:1.0.0+tslp-{_grammar_version()}"
+        self.version = f"ast:1.0.0+tslp-{_grammar_version()}+{tokenizer_identity(self.config.tokenizer, require_exact=require_exact_tokenizer)}"
 
     def chunk(self, file: SourceFile) -> list[Chunk]:
         if not file.content.strip():
@@ -296,7 +325,10 @@ class AstChunker:
                 )
                 first = min((m.start_line for m in members), default=info.end + 1)
                 skeleton_end = max(start, first - 1)
-                if _tokens(table.text(start, skeleton_end), self.config) <= self.config.max_chunk_tokens:
+                if (
+                    _tokens(table.text(start, skeleton_end), self.config)
+                    <= self.config.max_chunk_tokens
+                ):
                     skeleton = make_chunk(
                         file,
                         table,
@@ -353,6 +385,8 @@ class AstChunker:
                     "import_clause",
                     "module",
                     "expression_statement",
+                    "pragma_directive",
+                    "import_directive",
                 }:
                     chunks.extend(
                         block_split(

@@ -1,8 +1,11 @@
+import pytest
+
 from app.config.pipeline import PipelineConfig
 from app.ingestion.chunkers import AstChunker, FixedChunker
 from app.ingestion.chunkers.tokens import count_tokens
 from app.interfaces.registry import REGISTRY, build_pipeline
 from app.models import SourceFile
+from app.repos_git.filter import FileFilter
 
 
 def source(path: str, language: str, text: str) -> SourceFile:
@@ -61,10 +64,27 @@ def test_markdown_fenced_hash_is_not_heading():
 
 
 def test_unsupported_language_records_fallback_and_covers_file():
-    file = source("main.go", "Go", "package main\n\nfunc main() {\n    println(\"hi\")\n}\n")
+    file = source("main.go", "Go", 'package main\n\nfunc main() {\n    println("hi")\n}\n')
     chunks = AstChunker(PipelineConfig()).chunk(file)
     assert chunks and all(chunk.fallback_reason == "unsupported_language" for chunk in chunks)
     assert_exact(file, chunks)
+
+
+def test_solidity_language_is_recognized():
+    assert FileFilter.language("contracts/Avatar.sol") == "Solidity"
+
+
+def test_solidity_structure_when_grammar_is_available():
+    file = source(
+        "C.sol",
+        "Solidity",
+        "pragma solidity ^0.8.0;\ncontract C {\n event E(address a);\n"
+        " constructor() {}\n function f(uint x) public {}\n}\n",
+    )
+    chunks = AstChunker(PipelineConfig()).chunk(file)
+    if any(chunk.fallback_reason == "no_grammar" for chunk in chunks):
+        pytest.skip("Solidity grammar is not installed")
+    assert any(chunk.symbol == "C" and chunk.symbol_type == "class" for chunk in chunks)
 
 
 def test_registry_exposes_both_chunkers():

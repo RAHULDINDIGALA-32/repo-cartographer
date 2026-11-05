@@ -2,6 +2,7 @@ from app.config.pipeline import PipelineConfig
 from app.models import Chunk, SourceFile
 
 from .common import LineTable, line_split
+from .tokens import tokenizer_identity
 
 
 class FixedChunker:
@@ -10,6 +11,7 @@ class FixedChunker:
 
     def __init__(self, config: PipelineConfig | None = None, **_: object):
         self.config = config or PipelineConfig(chunker="fixed")
+        self.version = f"fixed:1.0.0+{tokenizer_identity(self.config.tokenizer)}"
 
     def chunk(self, file: SourceFile) -> list[Chunk]:
         table = LineTable.from_text(file.content)

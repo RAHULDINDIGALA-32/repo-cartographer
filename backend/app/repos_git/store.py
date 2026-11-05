@@ -17,7 +17,7 @@ class RepoStore:
     def _select(self, suffix: str) -> str:
         return (
             f"SELECT id,url,owner,name,default_branch,indexed_sha,status,last_error,"
-            f"last_checked_at,last_queried_at,created_at,updated_at FROM "
+            f"last_checked_at,last_queried_at,indexed_at,created_at,updated_at FROM "
             f"{self.schema}.repos {suffix}"
         )
 
@@ -34,8 +34,9 @@ class RepoStore:
             last_error=row[7],
             last_checked_at=row[8],
             last_queried_at=row[9],
-            created_at=row[10],
-            updated_at=row[11],
+            indexed_at=row[10],
+            created_at=row[11],
+            updated_at=row[12],
         )
 
     async def get_repo(self, repo_id: int) -> Repo:
@@ -67,8 +68,9 @@ class RepoStore:
                         last_error=row[7],
                         last_checked_at=row[8],
                         last_queried_at=row[9],
-                        created_at=row[10],
-                        updated_at=row[11],
+                        indexed_at=row[10],
+                        created_at=row[11],
+                        updated_at=row[12],
                     )
                 ]
             ]
@@ -100,7 +102,15 @@ class RepoStore:
         return await self.get_repo_by_url(ref.url)
 
     async def update_repo_fields(self, repo_id: int, **fields):
-        allowed = {"default_branch", "status", "last_error", "last_checked_at", "updated_at"}
+        allowed = {
+            "default_branch",
+            "status",
+            "last_error",
+            "last_checked_at",
+            "indexed_at",
+            "indexed_sha",
+            "updated_at",
+        }
         unknown = set(fields) - allowed
         if unknown:
             raise DatabaseError(f"Unsupported repository fields: {sorted(unknown)}")

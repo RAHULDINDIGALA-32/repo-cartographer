@@ -31,6 +31,18 @@ class Settings(BaseSettings):
     clone_timeout_seconds: int = Field(300, gt=0)
     git_max_concurrency: int = Field(2, ge=1)
     max_remote_repo_size_mb: int = Field(500, gt=0)
+    provider_max_retries: int = Field(5, ge=0)
+    provider_backoff_base_seconds: float = Field(1.0, gt=0)
+    provider_backoff_max_seconds: float = Field(30.0, gt=0)
+    embed_timeout_seconds: int = Field(60, gt=0)
+    embed_max_concurrency: int = Field(2, ge=1)
+    embed_batch_max_texts: int = Field(64, ge=1)
+    embed_batch_max_tokens: int = Field(50_000, ge=1)
+    voyage_rpm_limit: int | None = Field(None, ge=1)
+    voyage_tpm_limit: int | None = Field(None, ge=1)
+    index_window_files: int = Field(25, ge=1)
+    index_stale_after_minutes: int = Field(30, gt=0)
+    require_exact_tokenizer: bool = False
 
     @model_validator(mode="after")
     def validate_pool(self):

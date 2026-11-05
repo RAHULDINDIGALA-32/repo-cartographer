@@ -31,3 +31,13 @@ def count_tokens(text: str, tokenizer: str = "cl100k_base") -> int:
             log.warning("tokenizer data unavailable; using deterministic estimate", exc_info=exc)
             _warned = True
         return max(1, (len(text.encode("utf-8")) + 3) // 4)
+
+
+def tokenizer_identity(tokenizer: str = "cl100k_base", *, require_exact: bool = False) -> str:
+    try:
+        _encoder(tokenizer)
+        return f"tok-{tokenizer.replace('_', '-')}"
+    except Exception as exc:
+        if require_exact:
+            raise RuntimeError(f"Tokenizer data for {tokenizer} is unavailable") from exc
+        return "tok-estimate"

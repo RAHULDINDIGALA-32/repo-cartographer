@@ -97,6 +97,7 @@ class Repo(ValueModel):
     ref: RepoRef
     default_branch: str | None = None
     indexed_sha: str | None = None
+    indexed_at: object | None = None
     status: Literal["registered", "indexing", "ready", "failed"]
     last_error: str | None = None
     last_checked_at: object | None = None
@@ -188,6 +189,7 @@ class Chunk(ValueModel):
     part_index: int | None = Field(default=None, ge=1)
     part_count: int | None = Field(default=None, ge=1)
     fallback_reason: str | None = None
+    enricher_version: str | None = None
 
     @model_validator(mode="after")
     def valid_range(self):
