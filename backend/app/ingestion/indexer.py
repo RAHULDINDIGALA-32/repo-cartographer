@@ -264,7 +264,13 @@ class Indexer:
     async def status(self, repo_id: int) -> dict:
         async with self.writer.db.connection() as conn:
             cur = await conn.execute(
-                f"SELECT r.status,r.indexed_sha,r.indexed_at,r.last_error,count(DISTINCT f.id),count(c.id),count(c.id) FILTER (WHERE c.embedding IS NOT NULL),COALESCE(sum(pg_column_size(c.embedding)+pg_column_size(c.text)+pg_column_size(c.search_text)),0) FROM {self.writer.schema}.repos r LEFT JOIN {self.writer.schema}.files f ON f.repo_id=r.id LEFT JOIN {self.writer.schema}.chunks c ON c.repo_id=r.id WHERE r.id=%s GROUP BY r.id",
+                f"""SELECT r.status,r.indexed_sha,r.indexed_at,r.last_error,
+                    (SELECT count(*) FROM {self.writer.schema}.files WHERE repo_id=r.id),
+                    (SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=r.id),
+                    (SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=r.id AND embedding IS NOT NULL),
+                    (SELECT COALESCE(sum(pg_column_size(embedding)+pg_column_size(text)+pg_column_size(search_text)),0)
+                     FROM {self.writer.schema}.chunks WHERE repo_id=r.id)
+                    FROM {self.writer.schema}.repos r WHERE r.id=%s""",
                 (repo_id,),
             )
             row = await cur.fetchone()
@@ -312,7 +318,7 @@ class Indexer:
             for key, query in {
                 "null_embeddings": f"SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=%s AND embedding IS NULL",
                 "missing_files": f"SELECT count(*) FROM {self.writer.schema}.chunks c LEFT JOIN {self.writer.schema}.files f ON f.id=c.file_id WHERE c.repo_id=%s AND f.id IS NULL",
-                "empty_fts": f"SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=%s AND (fts IS NULL OR numnode(fts)=0)",
+                "empty_fts": f"SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=%s AND (fts IS NULL OR fts = ''::tsvector)",
                 "empty_search_text": f"SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=%s AND btrim(search_text)=''",
                 "invalid_ranges": f"SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=%s AND end_line < start_line",
                 "below_min": f"SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=%s AND token_count < %s",

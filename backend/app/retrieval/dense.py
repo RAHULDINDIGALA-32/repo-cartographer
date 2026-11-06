@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pgvector import Vector
+
 from app.core.errors import ConflictError, NotFoundError, RetrievalError
 from app.models import ChunkRecord, QueryAnalysis, RetrievalHit
 from app.retrieval.vectors import vector_to_list
@@ -56,7 +58,7 @@ class DenseRetriever:
                 if language:
                     conditions.append("lower(f.language)=lower(%s)")
                     params.append(language)
-                params = [query_vector, *params, max(0, int(top_k))]
+                params = [Vector(query_vector), *params, max(0, int(top_k))]
                 cur = await conn.execute(
                     f"""SELECT c.id,c.file_id,c.symbol,c.symbol_type,c.parent_symbol,c.start_line,c.end_line,c.text,
                     c.content_hash,c.search_text,c.token_count,c.chunker_version,c.enricher_version,
