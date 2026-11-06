@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     index_window_files: int = Field(25, ge=1)
     index_stale_after_minutes: int = Field(30, gt=0)
     require_exact_tokenizer: bool = False
+    generation_timeout_seconds: int = Field(120, gt=0)
+    anthropic_max_concurrency: int = Field(4, ge=1)
+    query_embed_timeout_seconds: int = Field(20, gt=0)
 
     @model_validator(mode="after")
     def validate_pool(self):

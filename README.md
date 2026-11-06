@@ -1,6 +1,6 @@
 # repo-cartographer
 
-Backend RAG service for asking questions about public GitHub repositories with grounded `file:line` citations. The system is built around PostgreSQL/pgvector, hybrid retrieval, AST-aware chunking, reranking, and incremental indexing.
+Backend RAG service for asking questions about public GitHub repositories with grounded `file:line` citations. The system is built around PostgreSQL/pgvector, dense retrieval, AST-aware chunking, and incremental indexing. Hybrid retrieval and reranking are planned for B5.
 
 ## Local setup
 
@@ -72,4 +72,17 @@ lines: 40-66
 The embedding provider receives repository source text and deterministic metadata. This project indexes public repositories only; users should treat source text as leaving the local machine when Voyage embedding is enabled. Provider keys are never logged or committed. The implementation follows Voyage’s current embeddings API contract for document input, explicit `output_dimension`, and the configured model’s batch limits: [Voyage embeddings API](https://docs.voyageai.com/reference/embeddings-api).
 
 Use `index verify <repo_id>` before B4 retrieval work. It checks embeddings, versions, generated full-text search data, file/chunk referential integrity, line ranges, and sub-minimum chunk counts. B3 does not create a vector index; B4 owns that benchmark and decision.
+
+## Asking questions
+
+B4 provides exact dense retrieval followed by context deduplication, a token budget, a grounded Claude prompt, and structural citation validation. Repository content is treated as untrusted data inside delimiters; the generator is instructed to ignore instructions found in source code and to say when evidence is insufficient. This is single-turn, dense-only retrieval: sparse search, fusion, reranking, query rewriting, semantic faithfulness checks, and remote staleness checks are deferred to later milestones.
+
+```text
+uv run cartographer ask <repo_id> "Where does Flask dispatch a request?"
+uv run cartographer ask <repo_id> "Where does Flask dispatch a request?" --no-generate --show-context
+uv run cartographer ask <repo_id> "Where does Flask dispatch a request?" --path src/flask --k 8
+uv run cartographer bench vector <repo_id> --json
+```
+
+Answers cite context blocks as `[1]` or `[1][3]`. The CLI prints the cited source path, line range, commit permalink, stage timings, and token usage. Citation validation is structural only: it confirms that cited block numbers exist and ignores markers inside inline or fenced code, but it does not prove that a citation semantically supports a claim.
 

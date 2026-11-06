@@ -132,7 +132,12 @@ class IndexWriter:
                 f"SELECT content_hash,embedding FROM {self.schema}.chunks WHERE content_hash = ANY(%s) AND embedder_version=%s AND embedding IS NOT NULL",
                 (hashes, embedder_version),
             )
-            return {row[0]: list(row[1]) for row in await cur.fetchall()}
+            from app.retrieval.vectors import vector_to_list
+
+            return {
+                row[0]: vector_to_list(row[1], dimension=self.embedding_dim)
+                for row in await cur.fetchall()
+            }
 
     async def finish_run(
         self, run_id: int, status: str, counters: dict, stats: dict, error: str | None = None

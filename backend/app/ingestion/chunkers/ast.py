@@ -192,6 +192,15 @@ def _children_definitions(
     result: list[Chunk] = []
     for _child, info in children:
         name = info.symbol
+        if info.symbol_type == "function":
+            info = _NodeInfo(
+                info.node,
+                info.base,
+                info.symbol,
+                "method",
+                info.start,
+                info.end,
+            )
         if count := _tokens(table.text(info.start, info.end), config):
             if count <= config.max_chunk_tokens:
                 result.append(
@@ -242,7 +251,7 @@ class AstChunker:
         **_: object,
     ):
         self.config = config or PipelineConfig()
-        self.version = f"ast:1.0.0+tslp-{_grammar_version()}+{tokenizer_identity(self.config.tokenizer, require_exact=require_exact_tokenizer)}"
+        self.version = f"ast:1.1.0+tslp-{_grammar_version()}+{tokenizer_identity(self.config.tokenizer, require_exact=require_exact_tokenizer)}"
 
     def chunk(self, file: SourceFile) -> list[Chunk]:
         if not file.content.strip():

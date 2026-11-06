@@ -11,10 +11,11 @@ llm_chunk_summaries: false
 embedder: voyage-code
 embedding_model: voyage-code-3
 embedding_dim: 1024
-retriever: hybrid
+analyzer: none
+retriever: dense
 fusion: rrf
 rrf_k: 60
-reranker: voyage
+reranker: none
 rerank_model: rerank-2.5
 top_k_dense: 20
 top_k_sparse: 20
@@ -24,6 +25,10 @@ context_token_budget: 7000
 analyzer_model: claude-3-5-haiku-latest
 generator_model: claude-sonnet-4-5
 max_answer_tokens: 1000
+assembler: default
+generator: claude
+generator_temperature: 0.0
+max_question_chars: 2000
 poll_interval_minutes: 15
 exclude_globs: []
 include_globs: []

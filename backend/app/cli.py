@@ -17,11 +17,14 @@ from app.core.errors import AppError
 from app.core.logging import bind_context, configure_logging
 from app.db.migrate import MigrationRunner
 from app.db.pool import Database
+from app.generation.engine import QueryEngine, QueryOptions
 from app.ingestion.chunkers import AstChunker, FixedChunker
 from app.ingestion.chunkers.ast import tree_dump
 from app.ingestion.chunkers.tokens import tokenizer_identity
 from app.ingestion.indexer import Indexer, IndexOptions
+from app.interfaces.registry import build_pipeline
 from app.repos_git.manager import RepoManager
+from app.retrieval.benchmark import benchmark_vector
 
 app = typer.Typer(help="Repo Cartographer backend CLI")
 db_app = typer.Typer()
@@ -34,8 +37,8 @@ chunks_app = typer.Typer()
 app.add_typer(chunks_app, name="chunks")
 index_app = typer.Typer()
 app.add_typer(index_app, name="index")
-for name in ("ask", "eval"):
-    app.add_typer(typer.Typer(), name=name)
+bench_app = typer.Typer()
+app.add_typer(bench_app, name="bench")
 
 
 def load_settings():
@@ -332,6 +335,94 @@ def make_indexer(s, d):
     return Indexer(repo_manager(s, d), s, load_pipeline())
 
 
+def make_query_engine(s, d):
+    return QueryEngine(d, s, load_pipeline())
+
+
+@app.command("ask")
+def ask_run(
+    repo_id: int,
+    question: str,
+    k: int | None = typer.Option(None, "--k"),
+    path: str | None = typer.Option(None, "--path"),
+    language: str | None = typer.Option(None, "--language"),
+    show_context: bool = typer.Option(False, "--show-context"),
+    no_generate: bool = typer.Option(False, "--no-generate"),
+    json_output: bool = typer.Option(False, "--json"),
+    no_stream: bool = typer.Option(False, "--no-stream"),
+):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            events = []
+            async for event in make_query_engine(s, d).ask(
+                repo_id,
+                question,
+                QueryOptions(top_k=k, path_prefix=path, language=language, no_generate=no_generate),
+            ):
+                events.append(event)
+                if json_output:
+                    continue
+                if event["kind"] == "retrieval" and show_context:
+                    typer.echo(json.dumps(event, sort_keys=True))
+                elif event["kind"] == "token" and not no_stream:
+                    typer.echo(event.get("text", ""), nl=False)
+                elif event["kind"] == "citations":
+                    typer.echo("\n\nSources:")
+                    for citation in event.get("citations", []):
+                        typer.echo(
+                            f"[{citation['index']}] {citation['path']}:{citation['start_line']}-{citation['end_line']} {citation['url']}"
+                        )
+                elif event["kind"] == "done":
+                    typer.echo(
+                        "\n"
+                        + json.dumps(
+                            {
+                                key: event.get(key)
+                                for key in (
+                                    "latencies_ms",
+                                    "tokens_in",
+                                    "tokens_out",
+                                    "indexed_sha",
+                                )
+                            },
+                            sort_keys=True,
+                        )
+                    )
+                elif event["kind"] == "error":
+                    typer.echo(f"Error: {event.get('message')}", err=True)
+            if json_output:
+                typer.echo(json.dumps(events, default=str, sort_keys=True))
+            if events and events[-1].get("kind") == "error":
+                raise typer.Exit(1)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@bench_app.command("vector")
+def bench_vector(repo_id: int, json_output: bool = typer.Option(False, "--json")):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            pipeline = build_pipeline(load_pipeline(), {"db": d, "settings": s})
+            result = await benchmark_vector(pipeline.stages["retriever"], repo_id)
+            typer.echo(
+                json.dumps(result, sort_keys=True)
+                if json_output
+                else json.dumps(result, indent=2, sort_keys=True)
+            )
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
 @index_app.command("estimate")
 def index_estimate(repo_id: int, chunker: str | None = typer.Option(None, "--chunker")):
     async def run():
@@ -367,8 +458,8 @@ def index_run(
         await d.open()
         try:
             service = make_indexer(s, d)
-            estimate = await service.estimate(repo_id, chunker=chunker)
             if not yes:
+                estimate = await service.estimate(repo_id, chunker=chunker)
                 typer.echo(json.dumps(estimate, default=str, sort_keys=True))
                 if not typer.confirm("Proceed with indexing?"):
                     raise typer.Abort()

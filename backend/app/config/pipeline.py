@@ -22,10 +22,11 @@ class PipelineConfig(BaseModel):
     embedder: str = "voyage-code"
     embedding_model: str = "voyage-code-3"
     embedding_dim: int = Field(1024, gt=0)
-    retriever: Literal["dense", "sparse", "hybrid"] = "hybrid"
+    analyzer: Literal["none"] = "none"
+    retriever: Literal["dense", "sparse", "hybrid"] = "dense"
     fusion: str = "rrf"
     rrf_k: int = Field(60, gt=0)
-    reranker: Literal["none", "voyage"] = "voyage"
+    reranker: Literal["none", "voyage"] = "none"
     rerank_model: str = "rerank-2.5"
     top_k_dense: int = Field(20, gt=0)
     top_k_sparse: int = Field(20, gt=0)
@@ -35,6 +36,10 @@ class PipelineConfig(BaseModel):
     analyzer_model: str = "claude-3-5-haiku-latest"
     generator_model: str = "claude-sonnet-4-5"
     max_answer_tokens: int = Field(1000, gt=0)
+    assembler: Literal["default"] = "default"
+    generator: Literal["claude"] = "claude"
+    generator_temperature: float = Field(0.0, ge=0, le=1)
+    max_question_chars: int = Field(2000, gt=0)
     poll_interval_minutes: int = Field(15, gt=0)
     exclude_globs: list[str] = []
     include_globs: list[str] = []

@@ -5,6 +5,7 @@ description = "Onboard to unfamiliar code in minutes, not days, with answers you
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.143.0",
+    "anthropic>=0.75.0",
     "httpx>=0.28.1",
     "pathspec>=1.1.1",
     "psycopg[binary,pool]>=3.2.0",
@@ -55,6 +56,9 @@ select = ["E", "F", "I", "UP", "B"]
 "app/providers/*.py" = ["E501"]
 "tests/test_b3_primitives.py" = ["E501"]
 "tests/test_b3_writer.py" = ["E501"]
+"app/generation/*.py" = ["E501"]
+"app/retrieval/*.py" = ["E501"]
+"app/providers/anthropic.py" = ["E501"]
 
 [dependency-groups]
 dev = [
