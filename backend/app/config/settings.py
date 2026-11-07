@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     index_stale_after_minutes: int = Field(30, gt=0)
     require_exact_tokenizer: bool = False
     query_embed_timeout_seconds: int = Field(20, gt=0)
+    analyzer_timeout_seconds: int = Field(8, gt=0)
+    rerank_timeout_seconds: int = Field(20, gt=0)
 
     @model_validator(mode="after")
     def validate_pool(self):

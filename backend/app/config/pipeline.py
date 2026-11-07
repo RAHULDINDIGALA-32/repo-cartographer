@@ -26,6 +26,23 @@ class LLMSpec(BaseModel):
         return self
 
 
+class PriorsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    test_multiplier: float = Field(1.0, ge=0)
+    header_multiplier: float = Field(1.0, ge=0)
+    path_hint_multiplier: float = Field(1.0, ge=0)
+
+
+class AssemblerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    name: Literal["default"] = "default"
+    max_chunks_per_file: int = Field(0, ge=0)
+    near_duplicate_threshold: float = Field(1.0, ge=0, le=1)
+    expand_parent: bool = False
+    expand_adjacent_parts: bool = False
+    expansion_max_blocks: int = Field(2, ge=0)
+
+
 class PipelineConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     chunker: str = "ast"
@@ -42,17 +59,29 @@ class PipelineConfig(BaseModel):
     embedding_model: str = "voyage-code-3"
     embedding_dim: int = Field(1024, gt=0)
     analyzer: LLMSpec | None = None
+    analysis: Literal["none", "rule", "llm"] = "none"
     retriever: Literal["dense", "sparse", "hybrid"] = "dense"
+    hybrid_sources: list[Literal["dense", "sparse", "symbol"]] = ["dense", "sparse", "symbol"]
+    fusion_weights: dict[str, float] = {
+        "dense": 1.0,
+        "dense_sub": 1.0,
+        "sparse": 1.0,
+        "symbol": 1.0,
+    }
     fusion: str = "rrf"
     rrf_k: int = Field(60, gt=0)
     reranker: Literal["none", "voyage"] = "none"
     rerank_model: str = "rerank-2.5"
+    rerank_doc_max_tokens: int = Field(600, gt=0)
     top_k_dense: int = Field(20, gt=0)
     top_k_sparse: int = Field(20, gt=0)
+    top_k_symbol: int = Field(10, gt=0)
     top_k_fused: int = Field(30, gt=0)
     top_k_final: int = Field(8, gt=0)
     context_token_budget: int = Field(7000, gt=0)
-    assembler: Literal["default"] = "default"
+    assembler: AssemblerConfig = AssemblerConfig()
+    priors: PriorsConfig = PriorsConfig()
+    analyzer_repo_map: bool = True
     generator: LLMSpec = LLMSpec(provider="groq", model="openai/gpt-oss-120b", max_tokens=1000)
     max_question_chars: int = Field(2000, gt=0)
     poll_interval_minutes: int = Field(15, gt=0)
@@ -63,6 +92,8 @@ class PipelineConfig(BaseModel):
     @classmethod
     def reject_old_llm_keys(cls, values):
         if isinstance(values, dict):
+            if values.get("assembler") == "default":
+                values = {**values, "assembler": {"name": "default"}}
             old = {
                 key
                 for key in values
@@ -90,6 +121,12 @@ class PipelineConfig(BaseModel):
             raise ValueError(f"{self.embedder} requires embedding_dim={expected}")
         if self.top_k_final > self.top_k_fused:
             raise ValueError("top_k_final must be <= top_k_fused")
+        if not self.hybrid_sources:
+            raise ValueError("hybrid_sources must not be empty")
+        if any(value < 0 for value in self.fusion_weights.values()):
+            raise ValueError("fusion_weights must be non-negative")
+        if self.analysis == "llm" and self.analyzer is None:
+            raise ValueError("analysis='llm' requires an analyzer LLMSpec")
         return self
 
     @property

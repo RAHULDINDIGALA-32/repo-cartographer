@@ -1,0 +1,58 @@
+dense:
+  retriever: dense
+  analysis: none
+  reranker: none
+sparse:
+  retriever: sparse
+  analysis: none
+  reranker: none
+symbol:
+  retriever: symbol
+  analysis: rule
+  reranker: none
+hybrid2:
+  retriever: hybrid
+  hybrid_sources: [dense, sparse]
+  analysis: none
+  reranker: none
+hybrid3:
+  retriever: hybrid
+  hybrid_sources: [dense, sparse, symbol]
+  analysis: none
+  reranker: none
+hybrid3_rule:
+  retriever: hybrid
+  hybrid_sources: [dense, sparse, symbol]
+  analysis: rule
+  reranker: none
+hybrid3_llm:
+  retriever: hybrid
+  hybrid_sources: [dense, sparse, symbol]
+  analysis: llm
+  reranker: none
+hybrid3_llm_rerank:
+  retriever: hybrid
+  hybrid_sources: [dense, sparse, symbol]
+  analysis: llm
+  reranker: voyage
+hybrid3_llm_rerank_priors:
+  retriever: hybrid
+  hybrid_sources: [dense, sparse, symbol]
+  analysis: llm
+  reranker: voyage
+  priors:
+    test_multiplier: 0.8
+    header_multiplier: 0.9
+    path_hint_multiplier: 1.2
+hybrid3_llm_rerank_priors_asm:
+  retriever: hybrid
+  hybrid_sources: [dense, sparse, symbol]
+  analysis: llm
+  reranker: voyage
+  assembler:
+    name: default
+    max_chunks_per_file: 3
+    near_duplicate_threshold: 0.85
+    expand_parent: true
+    expand_adjacent_parts: true
+    expansion_max_blocks: 2

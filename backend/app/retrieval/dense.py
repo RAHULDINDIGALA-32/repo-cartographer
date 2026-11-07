@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from pgvector import Vector
 
 from app.core.errors import ConflictError, NotFoundError, RetrievalError
@@ -21,6 +23,7 @@ class DenseRetriever:
         self.last_status: str | None = None
         self.last_sql: str | None = None
         self.last_params: list[object] | None = None
+        self.last_latencies: dict[str, int] = {}
 
     async def retrieve(
         self,
@@ -33,7 +36,9 @@ class DenseRetriever:
     ) -> list[RetrievalHit]:
         if self.embedder is None:
             raise RetrievalError("Dense retriever requires an embedder")
+        started = time.perf_counter()
         query_vector = await self.embedder.embed_query(analysis.rewritten_query)
+        self.last_latencies["embed_query"] = round((time.perf_counter() - started) * 1000)
         return await self.retrieve_vector(
             repo_id,
             query_vector,
@@ -83,9 +88,12 @@ class DenseRetriever:
         ) q ON TRUE"""
         self.last_sql = sql
         self.last_params = params
+        started = time.perf_counter()
         async with self.db.connection() as conn:
             cur = await conn.execute(sql, params)
             rows = await cur.fetchall()
+        self.last_latencies["retrieve_sql"] = round((time.perf_counter() - started) * 1000)
+        self.last_latencies["retrieve_dense"] = self.last_latencies["retrieve_sql"]
         if not rows:
             raise NotFoundError("Repository not found")
         self.last_status, self.last_indexed_sha = rows[0][0], rows[0][1]

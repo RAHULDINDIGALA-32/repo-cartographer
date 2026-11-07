@@ -17,6 +17,7 @@ from app.core.errors import AppError
 from app.core.logging import bind_context, configure_logging
 from app.db.migrate import MigrationRunner
 from app.db.pool import Database
+from app.evaluation import retrieval_metrics, validate_questions
 from app.generation.engine import QueryEngine, QueryOptions
 from app.ingestion.chunkers import AstChunker, FixedChunker
 from app.ingestion.chunkers.ast import tree_dump
@@ -43,6 +44,8 @@ bench_app = typer.Typer()
 app.add_typer(bench_app, name="bench")
 provider_app = typer.Typer()
 app.add_typer(provider_app, name="provider")
+eval_app = typer.Typer()
+app.add_typer(eval_app, name="eval")
 
 
 def load_settings():
@@ -85,6 +88,76 @@ def provider_ping(name: str, model: str | None = typer.Option(None, "--model")):
                 raise typer.Exit(1)
         except AppError as exc:
             cli_error(exc)
+
+    run_async(run())
+
+
+@eval_app.command("validate")
+def eval_validate(path: Path = typer.Option(Path("../eval/questions.yaml"), "--path")):  # noqa: B008
+    import yaml
+
+    try:
+        values = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+        result = validate_questions(values)
+        typer.echo(json.dumps(result, indent=2, sort_keys=True))
+        if not result["ok"]:
+            raise typer.Exit(1)
+    except OSError as exc:
+        typer.echo(f"Error: cannot read evaluation file: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+
+@eval_app.command("retrieval")
+def eval_retrieval(
+    repo_id: int,
+    path: Path = typer.Option(Path("../eval/questions.yaml"), "--path"),  # noqa: B008
+    split: str = typer.Option("tune", "--split"),  # noqa: B008
+    preset: str = typer.Option("dense", "--preset"),  # noqa: B008
+    output: Path | None = typer.Option(None, "--output"),  # noqa: B008
+):
+    import yaml
+
+    async def run():
+        values = yaml.safe_load(path.read_text(encoding="utf-8")) or []
+        questions = [item for item in values if item.get("split") == split]
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        rows = []
+        try:
+            presets = yaml.safe_load(
+                (Path(__file__).parents[2] / "eval" / "presets.yaml").read_text(encoding="utf-8")
+            )
+            base_config = load_pipeline()
+            config_values = base_config.model_dump(mode="python")
+            config_values.update(presets[preset])
+            config = PipelineConfig.model_validate(config_values)
+            engine = QueryEngine(d, s, config)
+            for item in questions:
+                events = [
+                    event
+                    async for event in engine.ask(
+                        repo_id, item["question"], QueryOptions(no_generate=True)
+                    )
+                ]
+                retrieval = next((event for event in events if event["kind"] == "retrieval"), None)
+                hit_values = retrieval.get("hits", []) if retrieval else []
+                context_values = retrieval.get("context", []) if retrieval else []
+                rows.append(
+                    {
+                        "id": item["id"],
+                        "metrics": retrieval_metrics(
+                            hit_values, item.get("gold", []), context_values
+                        ),
+                        "retrieval": retrieval,
+                    }
+                )
+        finally:
+            await d.close()
+        result = {"preset": preset, "split": split, "questions": len(rows), "rows": rows}
+        typer.echo(json.dumps(result, default=str, sort_keys=True))
+        if output:
+            output.write_text(json.dumps(result, default=str, indent=2), encoding="utf-8")
 
     run_async(run())
 
@@ -386,8 +459,8 @@ def make_indexer(s, d):
     return Indexer(repo_manager(s, d), s, load_pipeline())
 
 
-def make_query_engine(s, d):
-    return QueryEngine(d, s, load_pipeline())
+def make_query_engine(s, d, config=None):
+    return QueryEngine(d, s, config or load_pipeline())
 
 
 @app.command("ask")
@@ -402,17 +475,50 @@ def ask_run(
     json_output: bool = typer.Option(False, "--json"),
     no_stream: bool = typer.Option(False, "--no-stream"),
     debug: bool = typer.Option(False, "--debug"),
+    analysis: str | None = typer.Option(None, "--analysis"),
+    retriever: str | None = typer.Option(None, "--retriever"),
+    rerank: str | None = typer.Option(None, "--rerank"),
+    preset: str | None = typer.Option(None, "--preset"),
+    trace: bool = typer.Option(False, "--trace"),
 ):
     async def run():
         s = load_settings()
         d = Database(s)
         await d.open()
         try:
+            config = load_pipeline()
+            overrides = {}
+            if analysis:
+                overrides["analysis"] = analysis
+            if retriever:
+                overrides["retriever"] = retriever
+            if rerank:
+                overrides["reranker"] = "voyage" if rerank == "on" else "none"
+            if preset:
+                import yaml
+
+                preset_path = Path(__file__).parents[2] / "eval" / "presets.yaml"
+                presets = yaml.safe_load(preset_path.read_text(encoding="utf-8")) or {}
+                if preset not in presets:
+                    raise typer.BadParameter(f"unknown preset: {preset}")
+                overrides.update(presets[preset])
+            if overrides:
+                values = config.model_dump(mode="python")
+                values.update(overrides)
+                config = PipelineConfig.model_validate(values)
             events = []
-            async for event in make_query_engine(s, d).ask(
+            async for event in make_query_engine(s, d, config).ask(
                 repo_id,
                 question,
-                QueryOptions(top_k=k, path_prefix=path, language=language, no_generate=no_generate),
+                QueryOptions(
+                    top_k=k,
+                    path_prefix=path,
+                    language=language,
+                    no_generate=no_generate,
+                    analysis=analysis,
+                    retriever=retriever,
+                    trace=trace,
+                ),
             ):
                 events.append(event)
                 if json_output:
@@ -422,11 +528,23 @@ def ask_run(
                 elif event["kind"] == "token" and not no_stream:
                     typer.echo(event.get("text", ""), nl=False)
                 elif event["kind"] == "citations":
-                    typer.echo("\n\nSources:")
-                    for citation in event.get("citations", []):
-                        typer.echo(
-                            f"[{citation['index']}] {citation['path']}:{citation['start_line']}-{citation['end_line']} {citation['url']}"
-                        )
+                    citations = event.get("citations", [])
+                    validation = event.get("validation", {})
+                    if citations:
+                        typer.echo("\n\nSources:")
+                        for citation in citations:
+                            typer.echo(
+                                f"[{citation['index']}] {citation['path']}:{citation['start_line']}-{citation['end_line']} {citation['url']}"
+                            )
+                    typer.echo(
+                        "Citation summary: "
+                        f"valid={len(validation.get('used', []))} "
+                        f"invalid={len(validation.get('invalid', []))} "
+                        f"unused={len(validation.get('unused_blocks', []))} "
+                        f"uncited_answer={validation.get('uncited_answer', False)}"
+                    )
+                    if validation.get("uncited_answer") or validation.get("invalid"):
+                        typer.echo("WARNING: citation validation found an issue.", err=True)
                 elif event["kind"] == "done":
                     typer.echo(
                         "\n"
@@ -443,6 +561,8 @@ def ask_run(
                             sort_keys=True,
                         )
                     )
+                    if trace and event.get("trace") and not json_output:
+                        typer.echo(json.dumps({"trace": event["trace"]}, sort_keys=True))
                 elif event["kind"] == "error":
                     if debug:
                         typer.echo(json.dumps(event, sort_keys=True), err=True)

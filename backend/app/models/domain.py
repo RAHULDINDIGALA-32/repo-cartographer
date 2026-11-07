@@ -218,14 +218,18 @@ class QueryAnalysis(ValueModel):
     rewritten_query: str
     sub_queries: list[str] = []
     identifiers: list[str] = []
+    keywords: list[str] = []
     path_hints: list[str] = []
     intent: Literal["locate", "explain", "trace_flow", "general"] = "general"
+    wants_tests: bool = False
+    source: Literal["none", "rule", "llm"] = "none"
+    degraded: bool = False
 
 
 class RetrievalHit(ValueModel):
     chunk: ChunkRecord
     score: float
-    source: Literal["dense", "sparse", "fused", "reranked"]
+    source: Literal["dense", "sparse", "symbol", "fused", "reranked"]
     rank: int = Field(ge=1)
 
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import quote
 
 from app.models import Citation, ContextBlock
 
-_MARKER = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+_MARKER = re.compile(
+    r"(?:\[\s*\d+\s*\]\s*(?:-|–|—)\s*\[\s*\d+\s*\]|\[\s*\d+(?:\s*(?:,|-|–|—)\s*\d+)*\s*\]|【\s*\d+(?:†[^】]*)?\s*】)"
+)
 
 
 @dataclass(frozen=True)
@@ -16,6 +18,7 @@ class CitationResult:
     invalid: list[int]
     unused_blocks: list[int]
     uncited_answer: bool
+    variants_normalized: list[str] = field(default_factory=list)
 
     def as_dict(self):
         return {
@@ -23,6 +26,7 @@ class CitationResult:
             "invalid": self.invalid,
             "unused_blocks": self.unused_blocks,
             "uncited_answer": self.uncited_answer,
+            "variants_normalized": self.variants_normalized,
         }
 
 
@@ -53,18 +57,40 @@ def _without_code(text: str) -> str:
             output.append("\n")
             continue
         result = []
-        i = 0
-        while i < len(line):
-            if line[i] == "`":
+        for char in line:
+            if char == "`":
                 in_inline = not in_inline
                 result.append(" ")
-            elif not in_inline:
-                result.append(line[i])
             else:
-                result.append(" ")
-            i += 1
+                result.append(char if not in_inline else " ")
         output.append("".join(result))
     return "".join(output)
+
+
+def _expand(marker: str) -> tuple[list[int], set[str]]:
+    variants = set()
+    if marker.startswith("【"):
+        variants.add("fullwidth")
+        if "†" in marker:
+            variants.add("line_suffix")
+        return [int(value) for value in re.findall(r"\d+", marker)[:1]], variants
+    if "–" in marker or "—" in marker:
+        variants.add("range")
+        values = [int(value) for value in re.findall(r"\d+", marker)]
+        return list(range(values[0], values[1] + 1)) if len(values) == 2 and values[0] <= values[
+            1
+        ] else values, variants
+    if "-" in marker and re.search(r"\[\s*\d+\s*-\s*\d+\s*\]", marker):
+        variants.add("range")
+        values = [int(value) for value in re.findall(r"\d+", marker)]
+        return list(range(values[0], values[1] + 1)) if len(values) == 2 and values[0] <= values[
+            1
+        ] else values, variants
+    if "," in marker:
+        variants.add("comma")
+    else:
+        variants.add("ascii")
+    return [int(value) for value in re.findall(r"\d+", marker)], variants
 
 
 def validate_citations(
@@ -72,8 +98,11 @@ def validate_citations(
 ) -> CitationResult:
     valid_indices = {block.index for block in blocks}
     found: list[int] = []
+    variants: set[str] = set()
     for match in _MARKER.finditer(_without_code(text)):
-        found.extend(int(value.strip()) for value in match.group(1).split(","))
+        values, seen = _expand(match.group(0))
+        found.extend(values)
+        variants.update(seen)
     used = sorted({value for value in found if value in valid_indices})
     invalid = sorted({value for value in found if value <= 0 or value not in valid_indices})
     citations = []
@@ -106,4 +135,5 @@ def validate_citations(
         invalid,
         sorted(valid_indices - set(used)),
         not bool(used) and not insufficient,
+        sorted(variants),
     )

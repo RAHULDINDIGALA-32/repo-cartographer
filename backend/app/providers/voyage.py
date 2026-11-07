@@ -155,3 +155,8 @@ class VoyageEmbedder:
     async def embed_query(self, text: str) -> list[float]:
         vectors = await self._embed([text], "query")
         return vectors[0]
+
+    async def embed_queries(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        return await self._embed(texts, "query")

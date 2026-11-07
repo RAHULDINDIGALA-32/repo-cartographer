@@ -50,16 +50,24 @@ def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -
     from app.providers.anthropic import ClaudeGenerator
     from app.providers.openai_compatible import OpenAICompatibleGenerator
     from app.providers.voyage import VoyageEmbedder
+    from app.retrieval.analyzers import LLMAnalyzer, RuleAnalyzer
     from app.retrieval.assembly import DefaultContextAssembler
     from app.retrieval.dense import DenseRetriever
+    from app.retrieval.hybrid import HybridRetriever, WeightedRRF
+    from app.retrieval.rerank import VoyageReranker
+    from app.retrieval.sparse import SparseRetriever, SymbolRetriever
 
-    if not REGISTRY["chunker"]:
+    if "ast" not in REGISTRY["chunker"]:
         register("chunker", "ast", AstChunker)
+    if "fixed" not in REGISTRY["chunker"]:
         register("chunker", "fixed", FixedChunker)
     if "voyage-code" not in REGISTRY["embedder"]:
         register("embedder", "voyage-code", VoyageEmbedder)
     if "dense" not in REGISTRY["retriever"]:
         register("retriever", "dense", DenseRetriever)
+    register("retriever", "sparse", SparseRetriever)
+    register("retriever", "symbol", SymbolRetriever)
+    register("retriever", "hybrid", HybridRetriever)
     if "default" not in REGISTRY["assembler"]:
         register("assembler", "default", DefaultContextAssembler)
     if "claude" not in REGISTRY["generator"]:
@@ -67,9 +75,12 @@ def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -
     if "openai_compatible" not in REGISTRY["generator"]:
         register("generator", "openai_compatible", OpenAICompatibleGenerator)
     register("analyzer", "none", _PassthroughAnalyzer)
+    register("analyzer", "rule", RuleAnalyzer)
+    register("analyzer", "llm", LLMAnalyzer)
     register("reranker", "none", _NoopReranker)
-    if deps and "rrf" not in REGISTRY["fusion"]:
-        register("fusion", "rrf", _NoopFusion)
+    register("reranker", "voyage", VoyageReranker)
+    if "rrf" not in REGISTRY["fusion"]:
+        register("fusion", "rrf", WeightedRRF)
     deps = deps or {}
     names = {
         "chunker": config.chunker,
@@ -79,20 +90,22 @@ def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -
         "reranker": config.reranker,
     }
     stages = {
-        kind: _make(kind, name, {**deps, "config": config} if kind == "chunker" else deps)
+        kind: _make(
+            kind,
+            name,
+            {**deps, "config": config} if kind == "chunker" else {**deps, "config": config},
+        )
         for kind, name in names.items()
     }
     if deps:
-        analyzer = _PassthroughAnalyzer(config=config)
-        if config.analyzer is not None:
-            raise ConfigError("LLM analyzer is reserved for B5; set analyzer: null")
+        analyzer = _make("analyzer", config.analysis, {**deps, "config": config})
         profile = get_profile(config.generator.provider)
         generator_factory = (
             ClaudeGenerator if profile.kind == "anthropic" else OpenAICompatibleGenerator
         )
         stages.update(
             analyzer=analyzer,
-            assembler=_make("assembler", config.assembler, {**deps, "config": config}),
+            assembler=_make("assembler", config.assembler.name, {**deps, "config": config}),
             generator=generator_factory(
                 **deps, config=config, llm_spec=config.generator, profile=profile
             ),

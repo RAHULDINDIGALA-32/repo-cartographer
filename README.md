@@ -86,6 +86,18 @@ uv run cartographer bench vector <repo_id> --json
 
 Answers cite context blocks as `[1]` or `[1][3]`. The CLI prints the cited source path, line range, commit permalink, stage timings, and token usage. Citation validation is structural only: it confirms that cited block numbers exist and ignores markers inside inline or fenced code, but it does not prove that a citation semantically supports a claim.
 
+## Retrieval
+
+B5 adds optional rule or LLM query analysis, dense/sparse/symbol signals, weighted reciprocal-rank fusion, optional Voyage reranking, score priors, and assembler safeguards for duplicate or over-represented files. Select an ablation with `--preset`, inspect retrieval without generation using `--no-generate`, and print the sanitized trace with `--trace`:
+
+```text
+uv run cartographer ask <repo_id> "Where is request dispatch implemented?" --preset hybrid3_rule --no-generate --trace
+uv run cartographer eval validate
+uv run cartographer eval retrieval <repo_id> --split tune --preset hybrid3 --path ../eval/questions.yaml
+```
+
+The B5 gold evidence is human-owned and must be verified at the indexed commit. An LLM analyzer can benefit from prior knowledge of famous repositories, so comparisons must include the less familiar NFT repository. Retrieval metrics are not generation-quality or faithfulness metrics; those belong to Project 4. A deployed backend should run in the same region as its database because developer-laptop round trips are not representative.
+
 ## LLM providers
 
 The active generator is an `LLMSpec` in `config.yaml`; it contains only the provider name, model, sampling temperature, and output-token limit. API keys, endpoints, timeouts, concurrency, and rate limits live in `.env` and are never stored in `query_logs.pipeline_config`. Built-in profiles are `anthropic`, `groq`, `openrouter`, and `custom` OpenAI-compatible endpoints. Switch providers by changing the generator spec, then run `uv run cartographer provider list` and `uv run cartographer provider ping $providerName --model $modelName` before asking questions. Use `ask --debug` for sanitized provider error codes and causes.
