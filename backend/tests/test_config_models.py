@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -13,6 +15,12 @@ def test_pipeline_defaults_and_snapshot():
         PipelineConfig(top_k_final=31)
     with pytest.raises(ValidationError):
         PipelineConfig.model_validate({"unknown": 1})
+
+
+def test_repository_pipeline_config_uses_active_groq_model():
+    config = PipelineConfig.from_yaml(Path(__file__).parents[2] / "config.yaml")
+    assert config.generator.provider == "groq"
+    assert config.generator.model == "openai/gpt-oss-120b"
 
 
 def test_repo_url_and_chunk_invariants():

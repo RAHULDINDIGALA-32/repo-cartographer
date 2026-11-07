@@ -86,3 +86,9 @@ uv run cartographer bench vector <repo_id> --json
 
 Answers cite context blocks as `[1]` or `[1][3]`. The CLI prints the cited source path, line range, commit permalink, stage timings, and token usage. Citation validation is structural only: it confirms that cited block numbers exist and ignores markers inside inline or fenced code, but it does not prove that a citation semantically supports a claim.
 
+## LLM providers
+
+The active generator is an `LLMSpec` in `config.yaml`; it contains only the provider name, model, sampling temperature, and output-token limit. API keys, endpoints, timeouts, concurrency, and rate limits live in `.env` and are never stored in `query_logs.pipeline_config`. Built-in profiles are `anthropic`, `groq`, `openrouter`, and `custom` OpenAI-compatible endpoints. Switch providers by changing the generator spec, then run `uv run cartographer provider list` and `uv run cartographer provider ping $providerName --model $modelName` before asking questions. Use `ask --debug` for sanitized provider error codes and causes.
+
+Groq and OpenRouter are OpenAI-compatible but have different model catalogs, limits, and data-routing policies. OpenRouter free variants may route through third-party providers with different retention policies; use them only for public repository data and verify the selected model/provider policy before use. Changing the embedding provider remains a re-indexing operation because it changes `embedder_version` and vector dimension.
+

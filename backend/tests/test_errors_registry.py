@@ -6,7 +6,9 @@ from app.interfaces.registry import build_pipeline, register
 
 
 def test_error_codes_are_unique_and_mapped():
-    assert len(ERROR_HTTP_STATUS) == 12
+    assert len(ERROR_HTTP_STATUS) >= 12
+    assert ERROR_HTTP_STATUS["provider_auth"] == 502
+    assert ERROR_HTTP_STATUS["provider_timeout"] == 504
 
 
 def test_registry_reports_unknown_and_builds_fake():

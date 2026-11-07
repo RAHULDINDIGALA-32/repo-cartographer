@@ -23,8 +23,10 @@ from app.ingestion.chunkers.ast import tree_dump
 from app.ingestion.chunkers.tokens import tokenizer_identity
 from app.ingestion.indexer import Indexer, IndexOptions
 from app.interfaces.registry import build_pipeline
+from app.providers.ping import ping_provider
+from app.providers.profiles import PROFILES
 from app.repos_git.manager import RepoManager
-from app.retrieval.benchmark import benchmark_vector
+from app.retrieval.benchmark import benchmark_scratch, benchmark_vector
 
 app = typer.Typer(help="Repo Cartographer backend CLI")
 db_app = typer.Typer()
@@ -39,6 +41,8 @@ index_app = typer.Typer()
 app.add_typer(index_app, name="index")
 bench_app = typer.Typer()
 app.add_typer(bench_app, name="bench")
+provider_app = typer.Typer()
+app.add_typer(provider_app, name="provider")
 
 
 def load_settings():
@@ -47,6 +51,42 @@ def load_settings():
 
 def load_pipeline():
     return PipelineConfig.from_yaml(Path(__file__).parents[2] / "config.yaml")
+
+
+@provider_app.command("list")
+def provider_list():
+    settings = load_settings()
+    config = load_pipeline()
+    active = {config.generator.provider}
+    for name, profile in PROFILES.items():
+        key = getattr(settings, profile.key_setting)
+        typer.echo(
+            json.dumps(
+                {
+                    "provider": name,
+                    "kind": profile.kind,
+                    "base_url": getattr(settings, f"{name}_base_url", profile.base_url),
+                    "key_configured": bool(key.get_secret_value()),
+                    "active": name in active,
+                },
+                sort_keys=True,
+            )
+        )
+
+
+@provider_app.command("ping")
+def provider_ping(name: str, model: str | None = typer.Option(None, "--model")):
+    async def run():
+        settings = load_settings()
+        try:
+            result = await ping_provider(name, settings, load_pipeline(), model)
+            typer.echo(json.dumps(result, sort_keys=True))
+            if not result["ok"]:
+                raise typer.Exit(1)
+        except AppError as exc:
+            cli_error(exc)
+
+    run_async(run())
 
 
 def make_runner(s, d):
@@ -127,7 +167,7 @@ def config_show():
 
 
 @app.command()
-def doctor():
+def doctor(live: bool = typer.Option(False, "--live")):
     async def run():
         s = load_settings()
         checks = {
@@ -136,7 +176,6 @@ def doctor():
             "db": False,
             "migrations": False,
             "embedding_dim": False,
-            "anthropic_key": bool(s.anthropic_api_key.get_secret_value()),
             "voyage_key": bool(s.voyage_api_key.get_secret_value()),
             "tokenizer": False,
         }
@@ -155,6 +194,18 @@ def doctor():
             pass
         d = Database(s)
         await d.open()
+        try:
+            active_provider = load_pipeline().generator.provider
+            checks[f"{active_provider}_key"] = bool(
+                getattr(s, f"{active_provider}_api_key").get_secret_value()
+            )
+            if live:
+                result = await ping_provider(active_provider, s, load_pipeline())
+                typer.echo(json.dumps({"provider_ping": result}, sort_keys=True))
+                checks["provider_live"] = bool(result.get("ok"))
+        except Exception:
+            if live:
+                checks["provider_live"] = False
         try:
             h = await d.health()
             checks.update(
@@ -350,6 +401,7 @@ def ask_run(
     no_generate: bool = typer.Option(False, "--no-generate"),
     json_output: bool = typer.Option(False, "--json"),
     no_stream: bool = typer.Option(False, "--no-stream"),
+    debug: bool = typer.Option(False, "--debug"),
 ):
     async def run():
         s = load_settings()
@@ -392,7 +444,10 @@ def ask_run(
                         )
                     )
                 elif event["kind"] == "error":
-                    typer.echo(f"Error: {event.get('message')}", err=True)
+                    if debug:
+                        typer.echo(json.dumps(event, sort_keys=True), err=True)
+                    else:
+                        typer.echo(f"Error [{event.get('code')}]: {event.get('message')}", err=True)
             if json_output:
                 typer.echo(json.dumps(events, default=str, sort_keys=True))
             if events and events[-1].get("kind") == "error":
@@ -404,14 +459,26 @@ def ask_run(
 
 
 @bench_app.command("vector")
-def bench_vector(repo_id: int, json_output: bool = typer.Option(False, "--json")):
+def bench_vector(
+    repo_id: int,
+    json_output: bool = typer.Option(False, "--json"),
+    scratch: bool = typer.Option(
+        False,
+        "--scratch",
+        help="Run the capped local scratch-table trial; never use on Supabase free tier",
+    ),
+):
     async def run():
         s = load_settings()
         d = Database(s)
         await d.open()
         try:
             pipeline = build_pipeline(load_pipeline(), {"db": d, "settings": s})
-            result = await benchmark_vector(pipeline.stages["retriever"], repo_id)
+            result = await (
+                benchmark_scratch(pipeline.stages["retriever"], repo_id)
+                if scratch
+                else benchmark_vector(pipeline.stages["retriever"], repo_id)
+            )
             typer.echo(
                 json.dumps(result, sort_keys=True)
                 if json_output
@@ -513,13 +580,13 @@ def index_runs(repo_id: int, json_output: bool = typer.Option(False, "--json")):
 
 
 @index_app.command("verify")
-def index_verify(repo_id: int):
+def index_verify(repo_id: int, allow_drift: bool = typer.Option(False, "--allow-drift")):
     async def run():
         s = load_settings()
         d = Database(s)
         await d.open()
         try:
-            result = await make_indexer(s, d).verify(repo_id)
+            result = await make_indexer(s, d).verify(repo_id, allow_drift=allow_drift)
             typer.echo(json.dumps(result, default=str, sort_keys=True))
             if not result["ok"]:
                 raise typer.Exit(1)

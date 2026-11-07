@@ -13,6 +13,7 @@ import structlog
 
 from app.config.settings import Settings
 from app.core.errors import ProviderError
+from app.providers.errors import safe_message
 
 log = structlog.get_logger(__name__)
 
@@ -51,6 +52,7 @@ class ProviderGateway:
         self,
         settings: Settings | None = None,
         *,
+        provider: str = "voyage",
         max_retries: int | None = None,
         backoff_base: float | None = None,
         backoff_max: float | None = None,
@@ -76,20 +78,24 @@ class ProviderGateway:
             if backoff_max is not None
             else (settings.provider_backoff_max_seconds if settings else 30.0)
         )
+        self.provider = provider
         self.max_concurrency = (
             max_concurrency
             if max_concurrency is not None
-            else (settings.embed_max_concurrency if settings else 2)
+            else (getattr(settings, f"{provider}_max_concurrency", None) if settings else None)
+            or (settings.embed_max_concurrency if settings and provider == "voyage" else 2)
         )
         self.rpm_limit = (
             rpm_limit
             if rpm_limit is not None
-            else (settings.voyage_rpm_limit if settings else None)
+            else (getattr(settings, f"{provider}_rpm_limit", None) if settings else None)
+            or (settings.voyage_rpm_limit if settings and provider == "voyage" else None)
         )
         self.tpm_limit = (
             tpm_limit
             if tpm_limit is not None
-            else (settings.voyage_tpm_limit if settings else None)
+            else (getattr(settings, f"{provider}_tpm_limit", None) if settings else None)
+            or (settings.voyage_tpm_limit if settings and provider == "voyage" else None)
         )
         self._sleep = sleep
         self._clock = clock
@@ -205,12 +211,18 @@ class ProviderGateway:
                             operation=operation_name,
                             attempt=attempt + 1,
                             status=status or "transport",
+                            error_type=type(exc).__name__,
+                            error_message=safe_message(str(exc)),
                         )
                         raise ProviderError(
                             f"{provider} {operation_name} failed after {attempt + 1} attempt(s)",
                             retryable=retryable,
                             retry_after=retry_after,
-                            details={"status_code": status} if status else None,
+                            details={
+                                "status_code": status,
+                                "error_type": type(exc).__name__,
+                                "message": safe_message(str(exc)),
+                            },
                         ) from exc
                     delay = (
                         retry_after

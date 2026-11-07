@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from psycopg.types.json import Jsonb
 
 from app.config.pipeline import PipelineConfig
-from app.core.errors import AppError, ConflictError, NotFoundError
+from app.core.errors import ConflictError, NotFoundError
 from app.generation.citations import CitationParser, validate_citations
 from app.interfaces.registry import build_pipeline
 from app.models import QueryAnalysis
@@ -156,7 +156,15 @@ class QueryEngine:
                     parser.feed(text)
                     yield {"kind": "token", "text": text}
                 elif event.kind == "error":
-                    raise AppError(event.message or "Generation failed")
+                    payload["error"] = f"{event.code}: {event.message}"
+                    payload["answer"] = answer
+                    yield {
+                        "kind": "error",
+                        "code": event.code or "generation_internal",
+                        "message": event.message or "Generation failed",
+                        "retryable": event.retryable,
+                    }
+                    return
                 elif event.kind == "done":
                     generator_stats = event.stats or {}
             result = validate_citations(
@@ -172,6 +180,9 @@ class QueryEngine:
                 first_token=generator_stats.get("first_token_ms", 0),
                 generate_total=generator_stats.get("total_ms", 0),
                 total=round((time.perf_counter() - started) * 1000),
+                provider=generator_stats.get("provider"),
+                model=generator_stats.get("model"),
+                usage_source=generator_stats.get("usage_source", "estimated"),
             )
             payload["answer"] = answer
             payload["query_log_id"] = await self._log(payload)
@@ -181,6 +192,9 @@ class QueryEngine:
                 "latencies_ms": payload["latencies_ms"],
                 "tokens_in": generator_stats.get("tokens_in"),
                 "tokens_out": generator_stats.get("tokens_out"),
+                "provider": generator_stats.get("provider"),
+                "model": generator_stats.get("model"),
+                "usage_source": generator_stats.get("usage_source", "estimated"),
                 "stop_reason": generator_stats.get("stop_reason"),
                 "truncated": generator_stats.get("truncated", False),
                 "indexed_sha": payload["indexed_sha"],

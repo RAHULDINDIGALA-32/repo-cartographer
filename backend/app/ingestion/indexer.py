@@ -312,7 +312,7 @@ class Indexer:
             )
             return [dict(zip(keys, row, strict=True)) for row in await cur.fetchall()]
 
-    async def verify(self, repo_id: int) -> dict:
+    async def verify(self, repo_id: int, *, allow_drift: bool = False) -> dict:
         async with self.writer.db.connection() as conn:
             checks = {}
             for key, query in {
@@ -346,6 +346,20 @@ class Indexer:
             version_counts = await cur.fetchone()
             checks["chunker_versions"] = version_counts[0]
             checks["enricher_versions"] = version_counts[1]
+            active_chunker = self._chunker().version
+            active_enricher = self.enricher.version
+            cur = await conn.execute(
+                f"SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=%s AND chunker_version IS DISTINCT FROM %s",
+                (repo_id, active_chunker),
+            )
+            checks["chunker_drift"] = (await cur.fetchone())[0]
+            cur = await conn.execute(
+                f"SELECT count(*) FROM {self.writer.schema}.chunks WHERE repo_id=%s AND enricher_version IS DISTINCT FROM %s",
+                (repo_id, active_enricher),
+            )
+            checks["enricher_drift"] = (await cur.fetchone())[0]
+            checks["active_chunker_version"] = active_chunker
+            checks["active_enricher_version"] = active_enricher
             checks["ok"] = not any(
                 checks[key]
                 for key in (
@@ -357,6 +371,8 @@ class Indexer:
                     "empty_files",
                     "missing_versions",
                     "wrong_embedder_version",
+                    "chunker_drift" if not allow_drift else "never",
+                    "enricher_drift" if not allow_drift else "never",
                 )
             )
             return checks

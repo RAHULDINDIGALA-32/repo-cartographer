@@ -4,6 +4,7 @@ from typing import Any
 
 from app.config.pipeline import PipelineConfig
 from app.core.errors import ConfigError
+from app.providers.profiles import get_profile
 
 
 @dataclass
@@ -47,6 +48,7 @@ def _make(kind: str, name: str, deps: dict[str, Any]):
 def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -> Pipeline:
     from app.ingestion.chunkers import AstChunker, FixedChunker
     from app.providers.anthropic import ClaudeGenerator
+    from app.providers.openai_compatible import OpenAICompatibleGenerator
     from app.providers.voyage import VoyageEmbedder
     from app.retrieval.assembly import DefaultContextAssembler
     from app.retrieval.dense import DenseRetriever
@@ -62,6 +64,8 @@ def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -
         register("assembler", "default", DefaultContextAssembler)
     if "claude" not in REGISTRY["generator"]:
         register("generator", "claude", ClaudeGenerator)
+    if "openai_compatible" not in REGISTRY["generator"]:
+        register("generator", "openai_compatible", OpenAICompatibleGenerator)
     register("analyzer", "none", _PassthroughAnalyzer)
     register("reranker", "none", _NoopReranker)
     if deps and "rrf" not in REGISTRY["fusion"]:
@@ -79,10 +83,19 @@ def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -
         for kind, name in names.items()
     }
     if deps:
+        analyzer = _PassthroughAnalyzer(config=config)
+        if config.analyzer is not None:
+            raise ConfigError("LLM analyzer is reserved for B5; set analyzer: null")
+        profile = get_profile(config.generator.provider)
+        generator_factory = (
+            ClaudeGenerator if profile.kind == "anthropic" else OpenAICompatibleGenerator
+        )
         stages.update(
-            analyzer=_make("analyzer", config.analyzer, {**deps, "config": config}),
+            analyzer=analyzer,
             assembler=_make("assembler", config.assembler, {**deps, "config": config}),
-            generator=_make("generator", config.generator, {**deps, "config": config}),
+            generator=generator_factory(
+                **deps, config=config, llm_spec=config.generator, profile=profile
+            ),
         )
         stages["retriever"] = _make("retriever", config.retriever, {**deps, "config": config})
         stages["reranker"] = _make("reranker", config.reranker, {**deps, "config": config})

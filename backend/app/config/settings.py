@@ -16,6 +16,29 @@ class Settings(BaseSettings):
     db_pool_min: int = Field(1, ge=1)
     db_pool_max: int = Field(5, ge=1)
     anthropic_api_key: SecretStr = SecretStr("")
+    anthropic_base_url: str = "https://api.anthropic.com"
+    anthropic_timeout_seconds: int = Field(120, gt=0)
+    anthropic_max_concurrency: int = Field(4, ge=1)
+    anthropic_rpm_limit: int | None = Field(None, ge=1)
+    anthropic_tpm_limit: int | None = Field(None, ge=1)
+    groq_api_key: SecretStr = SecretStr("")
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_timeout_seconds: int = Field(120, gt=0)
+    groq_max_concurrency: int = Field(4, ge=1)
+    groq_rpm_limit: int | None = Field(None, ge=1)
+    groq_tpm_limit: int | None = Field(None, ge=1)
+    openrouter_api_key: SecretStr = SecretStr("")
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_timeout_seconds: int = Field(120, gt=0)
+    openrouter_max_concurrency: int = Field(4, ge=1)
+    openrouter_rpm_limit: int | None = Field(None, ge=1)
+    openrouter_tpm_limit: int | None = Field(None, ge=1)
+    openrouter_site_url: str | None = None
+    openrouter_app_name: str | None = None
+    custom_api_key: SecretStr = SecretStr("")
+    custom_base_url: str = "http://localhost:8000/v1"
+    custom_timeout_seconds: int = Field(120, gt=0)
+    custom_max_concurrency: int = Field(4, ge=1)
     voyage_api_key: SecretStr = SecretStr("")
     github_token: SecretStr = SecretStr("")
     data_dir: Path = Path("../data")
@@ -43,8 +66,6 @@ class Settings(BaseSettings):
     index_window_files: int = Field(25, ge=1)
     index_stale_after_minutes: int = Field(30, gt=0)
     require_exact_tokenizer: bool = False
-    generation_timeout_seconds: int = Field(120, gt=0)
-    anthropic_max_concurrency: int = Field(4, ge=1)
     query_embed_timeout_seconds: int = Field(20, gt=0)
 
     @model_validator(mode="after")
@@ -68,6 +89,9 @@ class Settings(BaseSettings):
             "database_url",
             "test_database_url",
             "anthropic_api_key",
+            "groq_api_key",
+            "openrouter_api_key",
+            "custom_api_key",
             "voyage_api_key",
             "github_token",
         ):

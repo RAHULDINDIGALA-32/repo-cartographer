@@ -256,6 +256,7 @@ class GenerationEvent(ValueModel):
     stats: dict | None = None
     code: str | None = None
     message: str | None = None
+    retryable: bool | None = None
 
 
 class IndexStats(ValueModel):

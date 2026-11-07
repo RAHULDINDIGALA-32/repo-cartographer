@@ -61,6 +61,13 @@ class GenerationError(AppError):
     http_status = 502
 
 
+class GenerationProviderError(GenerationError):
+    def __init__(self, code: str, message: str, *, retryable: bool, details=None):
+        super().__init__(message, details=details)
+        self.code = code
+        self.retryable = retryable
+
+
 class NotFoundError(AppError):
     code = "not_found"
     http_status = 404
@@ -96,7 +103,22 @@ ERROR_HTTP_STATUS = {
         ProviderError,
         RetrievalError,
         GenerationError,
+        GenerationProviderError,
         NotFoundError,
         ConflictError,
     )
 }
+
+ERROR_HTTP_STATUS.update(
+    {
+        "provider_auth": 502,
+        "provider_billing": 502,
+        "provider_model_not_found": 502,
+        "provider_bad_request": 502,
+        "provider_rate_limited": 502,
+        "provider_overloaded": 502,
+        "provider_unavailable": 502,
+        "provider_timeout": 504,
+        "generation_internal": 502,
+    }
+)
