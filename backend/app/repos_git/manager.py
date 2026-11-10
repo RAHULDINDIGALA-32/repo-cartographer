@@ -118,16 +118,17 @@ class RepoManager:
         )
         return RepoRegistration(repo=repo, already_existed=False)
 
-    async def check_remote(self, repo_id: int) -> RemoteCheck:
+    async def check_remote(self, repo_id: int, *, persist: bool = True) -> RemoteCheck:
         repo = await self.store.get_repo(repo_id)
         info = await get_remote_info(self.runner, self.transport_resolver(repo.ref))
-        await self.store.update_repo_fields(
-            repo_id,
-            default_branch=info.default_branch,
-            last_checked_at=__import__("datetime").datetime.now(
-                __import__("datetime").timezone.utc
-            ),
-        )
+        if persist:
+            await self.store.update_repo_fields(
+                repo_id,
+                default_branch=info.default_branch,
+                last_checked_at=__import__("datetime").datetime.now(
+                    __import__("datetime").timezone.utc
+                ),
+            )
         return RemoteCheck(
             remote_sha=info.head_sha,
             indexed_sha=repo.indexed_sha,

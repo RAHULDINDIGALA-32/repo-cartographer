@@ -17,7 +17,7 @@ class RepoStore:
     def _select(self, suffix: str) -> str:
         return (
             f"SELECT id,url,owner,name,default_branch,indexed_sha,status,last_error,"
-            f"last_checked_at,last_queried_at,indexed_at,created_at,updated_at FROM "
+            f"last_checked_at,last_queried_at,indexed_at,created_at,updated_at,pinned FROM "
             f"{self.schema}.repos {suffix}"
         )
 
@@ -37,6 +37,7 @@ class RepoStore:
             indexed_at=row[10],
             created_at=row[11],
             updated_at=row[12],
+            pinned=row[13],
         )
 
     async def get_repo(self, repo_id: int) -> Repo:
@@ -71,6 +72,7 @@ class RepoStore:
                         indexed_at=row[10],
                         created_at=row[11],
                         updated_at=row[12],
+                        pinned=row[13],
                     )
                 ]
             ]
@@ -110,6 +112,7 @@ class RepoStore:
             "indexed_at",
             "indexed_sha",
             "updated_at",
+            "pinned",
         }
         unknown = set(fields) - allowed
         if unknown:

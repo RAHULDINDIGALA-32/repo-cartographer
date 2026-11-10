@@ -98,6 +98,12 @@ uv run cartographer eval retrieval <repo_id> --split tune --preset hybrid3 --pat
 
 The B5 gold evidence is human-owned and must be verified at the indexed commit. An LLM analyzer can benefit from prior knowledge of famous repositories, so comparisons must include the less familiar NFT repository. Retrieval metrics are not generation-quality or faithfulness metrics; those belong to Project 4. A deployed backend should run in the same region as its database because developer-laptop round trips are not representative.
 
+## Keeping the index fresh
+
+`index sync <repo_id>` compares the latest filtered scan with indexed file rows. Hash changes, new/deleted files, language changes, zero-chunk repairs, and chunker/enricher/embedder drift are reprocessed; matching content hashes reuse existing vectors before provider calls. The projected post-sync chunk total is checked against the cap before embeddings begin. Use `index plan <repo_id>` to inspect the change set and projected embedding work; it makes no database writes or provider calls. `index run` is the forced full-reprocess form and still benefits from reuse. Freeze evaluation repositories with `repo pin <id>`; sync refuses pinned repositories unless `--allow-pinned` is supplied.
+
+Writes are atomic per file: concurrent queries see either old or new chunks for each file, while `indexed_sha` advances only after a successful run. A failed run leaves the previous indexed commit and stale deleted files in place for retry. Repository-level snapshot isolation is intentionally not provided. Renames are delete-plus-add and are re-embedded because the path is part of the embedding header.
+
 ## LLM providers
 
 The active generator is an `LLMSpec` in `config.yaml`; it contains only the provider name, model, sampling temperature, and output-token limit. API keys, endpoints, timeouts, concurrency, and rate limits live in `.env` and are never stored in `query_logs.pipeline_config`. Built-in profiles are `anthropic`, `groq`, `openrouter`, and `custom` OpenAI-compatible endpoints. Switch providers by changing the generator spec, then run `uv run cartographer provider list` and `uv run cartographer provider ping $providerName --model $modelName` before asking questions. Use `ask --debug` for sanitized provider error codes and causes.

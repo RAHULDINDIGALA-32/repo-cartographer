@@ -139,6 +139,48 @@ class IndexWriter:
                 for row in await cur.fetchall()
             }
 
+    async def load_files(self, repo_id: int) -> list[dict]:
+        async with self.db.connection() as conn:
+            cur = await conn.execute(
+                f"SELECT id,path,file_hash,language,size_bytes,last_seen_sha FROM {self.schema}.files WHERE repo_id=%s ORDER BY path",
+                (repo_id,),
+            )
+            return [dict(zip(("id", "path", "file_hash", "language", "size_bytes", "last_seen_sha"), row, strict=True)) for row in await cur.fetchall()]
+
+    async def load_chunk_summaries(self, repo_id: int, *, chunker_version: str, enricher_version: str, embedder_version: str) -> dict[str, dict]:
+        async with self.db.connection() as conn:
+            cur = await conn.execute(
+                f"""SELECT f.path, count(c.id),
+                    bool_or(c.chunker_version IS DISTINCT FROM %s),
+                    bool_or(c.enricher_version IS DISTINCT FROM %s),
+                    bool_or(c.embedder_version IS DISTINCT FROM %s)
+                    FROM {self.schema}.files f LEFT JOIN {self.schema}.chunks c ON c.file_id=f.id
+                    WHERE f.repo_id=%s GROUP BY f.path ORDER BY f.path""",
+                (chunker_version, enricher_version, embedder_version, repo_id),
+            )
+            return {row[0]: {"chunk_count": row[1], "chunker_drift": bool(row[2] or False), "enricher_drift": bool(row[3] or False), "embedder_drift": bool(row[4] or False)} for row in await cur.fetchall()}
+
+    async def chunk_counts(self, repo_id: int) -> dict[str, int]:
+        async with self.db.connection() as conn:
+            cur = await conn.execute(f"SELECT f.path,count(c.id) FROM {self.schema}.files f LEFT JOIN {self.schema}.chunks c ON c.file_id=f.id WHERE f.repo_id=%s GROUP BY f.path", (repo_id,))
+            return {row[0]: row[1] for row in await cur.fetchall()}
+
+    async def update_last_seen_sha(self, repo_id: int, paths: Iterable[str], sha: str) -> int:
+        paths = list(paths)
+        if not paths:
+            return 0
+        async with self.db.transaction() as conn:
+            cur = await conn.execute(f"UPDATE {self.schema}.files SET last_seen_sha=%s WHERE repo_id=%s AND path=ANY(%s)", (sha, repo_id, paths))
+            return cur.rowcount
+
+    async def repo_pinned(self, repo_id: int) -> bool:
+        async with self.db.connection() as conn:
+            cur = await conn.execute(f"SELECT pinned FROM {self.schema}.repos WHERE id=%s", (repo_id,))
+            row = await cur.fetchone()
+            if row is None:
+                raise NotFoundError("Repository not found")
+            return bool(row[0])
+
     async def finish_run(
         self, run_id: int, status: str, counters: dict, stats: dict, error: str | None = None
     ) -> None:

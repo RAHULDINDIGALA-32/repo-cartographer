@@ -104,6 +104,7 @@ class Repo(ValueModel):
     last_queried_at: object | None = None
     created_at: object | None = None
     updated_at: object | None = None
+    pinned: bool = False
 
 
 class RepoRegistration(ValueModel):

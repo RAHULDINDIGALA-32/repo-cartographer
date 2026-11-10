@@ -330,7 +330,7 @@ def repo_list():
                 present = repo_manager(s, d)._clone_dir(repo.id).is_dir()
                 typer.echo(
                     f"{repo.id}\t{repo.ref.url}\t{repo.status}\t"
-                    f"{(repo.indexed_sha or '')[:8]}\t{present}"
+                    f"{(repo.indexed_sha or '')[:8]}\t{present}\tpinned={repo.pinned}"
                 )
         except AppError as exc:
             cli_error(exc)
@@ -338,6 +338,31 @@ def repo_list():
             await d.close()
 
     run_async(run())
+
+
+def _repo_pin_command(repo_id: int, pinned: bool):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            await repo_manager(s, d).store.update_repo_fields(repo_id, pinned=pinned)
+            typer.echo(f"Repository {repo_id} {'pinned' if pinned else 'unpinned'}")
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+    run_async(run())
+
+
+@repo_app.command("pin")
+def repo_pin(repo_id: int):
+    _repo_pin_command(repo_id, True)
+
+
+@repo_app.command("unpin")
+def repo_unpin(repo_id: int):
+    _repo_pin_command(repo_id, False)
 
 
 @repo_app.command("check")
@@ -650,13 +675,47 @@ def index_run(
                 typer.echo(json.dumps(estimate, default=str, sort_keys=True))
                 if not typer.confirm("Proceed with indexing?"):
                     raise typer.Abort()
-            result = await service.index_repo(repo_id, IndexOptions(fetch=fetch, chunker=chunker))
+            result = await service.index_repo(repo_id, IndexOptions(fetch=fetch, chunker=chunker, no_fetch=not fetch))
             typer.echo(json.dumps(result, default=str, sort_keys=True))
         except AppError as exc:
             cli_error(exc)
         finally:
             await d.close()
 
+    run_async(run())
+
+
+@index_app.command("plan")
+def index_plan(repo_id: int, force: bool = typer.Option(False, "--force"), no_fetch: bool = typer.Option(False, "--no-fetch")):
+    async def run():
+        s = load_settings(); d = Database(s); await d.open()
+        try:
+            result = await make_indexer(s, d).plan(repo_id, IndexOptions(force=force, no_fetch=no_fetch))
+            typer.echo(json.dumps(result, default=str, sort_keys=True))
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+    run_async(run())
+
+
+@index_app.command("sync")
+def index_sync(repo_id: int, force: bool = typer.Option(False, "--force"), yes: bool = typer.Option(False, "--yes"), no_fetch: bool = typer.Option(False, "--no-fetch"), allow_pinned: bool = typer.Option(False, "--allow-pinned")):
+    async def run():
+        s = load_settings(); d = Database(s); await d.open()
+        try:
+            service = make_indexer(s, d)
+            if not yes:
+                plan = await service.plan(repo_id, IndexOptions(force=force, no_fetch=no_fetch))
+                typer.echo(json.dumps(plan, default=str, sort_keys=True))
+                if not typer.confirm("Proceed with sync?"):
+                    raise typer.Abort()
+            result = await service.sync_repo(repo_id, IndexOptions(force=force, no_fetch=no_fetch, allow_pinned=allow_pinned))
+            typer.echo(json.dumps(result, default=str, sort_keys=True))
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
     run_async(run())
 
 
