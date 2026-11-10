@@ -125,6 +125,12 @@ def eval_retrieval(
         await d.open()
         rows = []
         try:
+            repo = await repo_manager(s, d).store.get_repo(repo_id)
+            questions = [
+                item
+                for item in questions
+                if item.get("repo") == repo.ref.url and item.get("verified", False)
+            ]
             presets = yaml.safe_load(
                 (Path(__file__).parents[2] / "eval" / "presets.yaml").read_text(encoding="utf-8")
             )
@@ -134,12 +140,20 @@ def eval_retrieval(
             config = PipelineConfig.model_validate(config_values)
             engine = QueryEngine(d, s, config)
             for item in questions:
-                events = [
-                    event
-                    async for event in engine.ask(
-                        repo_id, item["question"], QueryOptions(no_generate=True)
-                    )
-                ]
+                try:
+                    events = [
+                        event
+                        async for event in engine.ask(
+                            repo_id, item["question"], QueryOptions(no_generate=True)
+                        )
+                    ]
+                except Exception as exc:
+                    rows.append({"id": item["id"], "error": str(exc)[:300]})
+                    continue
+                error = next((event for event in events if event["kind"] == "error"), None)
+                if error:
+                    rows.append({"id": item["id"], "error": error.get("message", "query failed")})
+                    continue
                 retrieval = next((event for event in events if event["kind"] == "retrieval"), None)
                 hit_values = retrieval.get("hits", []) if retrieval else []
                 context_values = retrieval.get("context", []) if retrieval else []
@@ -154,10 +168,22 @@ def eval_retrieval(
                 )
         finally:
             await d.close()
-        result = {"preset": preset, "split": split, "questions": len(rows), "rows": rows}
+        result = {
+            "preset": preset,
+            "split": split,
+            "repo_id": repo_id,
+            "repo_url": repo.ref.url,
+            "selected": len(questions),
+            "evaluated": sum("error" not in row for row in rows),
+            "errored": sum("error" in row for row in rows),
+            "skipped_unverified_or_other_repo": len(values) - len(questions),
+            "rows": rows,
+        }
         typer.echo(json.dumps(result, default=str, sort_keys=True))
         if output:
             output.write_text(json.dumps(result, default=str, indent=2), encoding="utf-8")
+        if result["errored"]:
+            raise typer.Exit(1)
 
     run_async(run())
 

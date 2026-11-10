@@ -60,7 +60,7 @@ class PipelineConfig(BaseModel):
     embedding_dim: int = Field(1024, gt=0)
     analyzer: LLMSpec | None = None
     analysis: Literal["none", "rule", "llm"] = "none"
-    retriever: Literal["dense", "sparse", "hybrid"] = "dense"
+    retriever: Literal["dense", "sparse", "symbol", "hybrid"] = "dense"
     hybrid_sources: list[Literal["dense", "sparse", "symbol"]] = ["dense", "sparse", "symbol"]
     fusion_weights: dict[str, float] = {
         "dense": 1.0,

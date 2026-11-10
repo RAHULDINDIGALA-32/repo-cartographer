@@ -82,6 +82,8 @@ class SparseRetriever:
         self.db = db
         self.schema = settings.db_schema if settings is not None else "cartographer"
         self.last_trace: dict = {}
+        self.last_indexed_sha: str | None = None
+        self.last_status: str | None = None
 
     async def retrieve(
         self, repo_id: int, analysis: QueryAnalysis, top_k: int, **_
@@ -103,6 +105,15 @@ class SparseRetriever:
         async with self.db.connection() as conn:
             cur = await conn.execute(sql, (tsquery, repo_id, max(0, int(top_k))))
             rows = await cur.fetchall()
+            state = await conn.execute(
+                f"SELECT status,indexed_sha FROM {self.schema}.repos WHERE id=%s", (repo_id,)
+            )
+            state_row = await state.fetchone()
+        if state_row is None:
+            from app.core.errors import NotFoundError
+
+            raise NotFoundError("Repository not found")
+        self.last_status, self.last_indexed_sha = state_row
         hits = [_hit(row, rank) for rank, row in enumerate(rows, 1)]
         self.last_trace = {"tokens": tokens, "ids": [hit.chunk.id for hit in hits]}
         return hits
@@ -116,6 +127,8 @@ class SymbolRetriever:
         self.db = db
         self.schema = settings.db_schema if settings is not None else "cartographer"
         self.last_trace: dict = {}
+        self.last_indexed_sha: str | None = None
+        self.last_status: str | None = None
 
     async def retrieve(
         self, repo_id: int, analysis: QueryAnalysis, top_k: int, **_
@@ -136,6 +149,15 @@ class SymbolRetriever:
         async with self.db.connection() as conn:
             cur = await conn.execute(sql, (values, repo_id, values, values, max(0, int(top_k))))
             rows = await cur.fetchall()
+            state = await conn.execute(
+                f"SELECT status,indexed_sha FROM {self.schema}.repos WHERE id=%s", (repo_id,)
+            )
+            state_row = await state.fetchone()
+        if state_row is None:
+            from app.core.errors import NotFoundError
+
+            raise NotFoundError("Repository not found")
+        self.last_status, self.last_indexed_sha = state_row
         hits = [_hit(row, rank, "symbol") for rank, row in enumerate(rows, 1)]
         self.last_trace = {"identifiers": identifiers, "ids": [hit.chunk.id for hit in hits]}
         return hits
