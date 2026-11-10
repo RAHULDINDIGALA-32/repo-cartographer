@@ -1,9 +1,8 @@
-# Gold Set
+# Gold Set (re-verified)
 # Indexed commits:
 # Flask: 49943b5a94413a530761350f04e896f76e8d620e
 # NFT:   c3cd4df76a283cadba142d0c868c484477c1ace0
-# Gold paths and supplied line ranges were checked against these source snapshots.
-
+#
 
 - id: flask-01
   repo: https://github.com/pallets/flask
@@ -11,111 +10,136 @@
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 284
-    - 335
-  notes: Targets Flask construction and automatic static route registration.
+    - 308
+    - 361
+    anchor: def __init__(
+  notes: Flask.__init__ incl. automatic 'static' add_url_rule (lines 349-361).
 - id: flask-02
   repo: https://github.com/pallets/flask
   question: Where does Flask register URL rules and determine the default HTTP methods for a view?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/sansio/app.py
     lines:
-    - 549
-    - 571
-  notes: Targets add_url_rule and method defaults.
+    - 605
+    - 662
+    anchor: def add_url_rule(
+  notes: 'App.add_url_rule: GET default, required_methods, automatic OPTIONS.'
 - id: flask-03
   repo: https://github.com/pallets/flask
-  question: How does full_dispatch_request coordinate request preprocessing, endpoint dispatch, exception handling,
-    and finalization?
+  question: How does full_dispatch_request coordinate request preprocessing, endpoint dispatch, exception handling, and finalization?
   category: identifier
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 935
-    - 964
-  notes: Targets the central request dispatcher.
+    - 1023
+    - 1054
+    anchor: def full_dispatch_request
+  notes: 'Central request dispatcher (3.2: takes ctx).'
 - id: flask-04
   repo: https://github.com/pallets/flask
   question: What does dispatch_request do after URL matching, including handling automatic OPTIONS requests?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 908
-    - 934
-  notes: Targets endpoint invocation and automatic OPTIONS handling.
+    - 993
+    - 1021
+    anchor: def dispatch_request
+  notes: Routing-exception check, automatic OPTIONS, view call.
 - id: flask-05
   repo: https://github.com/pallets/flask
-  question: Trace how a WSGI environment becomes a Flask response and how the request context is pushed during that
-    process.
+  question: Trace how a WSGI environment becomes a Flask response and how the request context is pushed during that process.
   category: trace_flow
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 1486
-    - 1522
+    - 1627
+    - 1677
+    anchor: def wsgi_app
   - path: src/flask/ctx.py
     lines:
-    - 380
-    - 406
-  notes: Cross-file WSGI entry and context push.
+    - 416
+    - 444
+    anchor: def push(self)
+  notes: 'Cross-file: wsgi_app -> ctx.push -> full_dispatch_request -> ctx.pop.'
 - id: flask-06
   repo: https://github.com/pallets/flask
   question: How does Flask.request_context construct the context associated with a WSGI environment?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 1427
-    - 1440
-  notes: Targets request_context.
+    - 1562
+    - 1576
+    anchor: def request_context
+  - path: src/flask/ctx.py
+    lines:
+    - 339
+    - 348
+    anchor: def from_environ
+  notes: request_context delegates to AppContext.from_environ (Flask 3.2 merged contexts).
 - id: flask-07
   repo: https://github.com/pallets/flask
   question: What happens when an AppContext is pushed, and in what order are session loading and URL matching performed?
   category: identifier
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: src/flask/ctx.py
     lines:
-    - 380
-    - 406
-  notes: Targets context activation, session loading, and routing.
+    - 416
+    - 444
+    anchor: def push(self)
+  notes: 'push: set contextvar, signal, open session (_get_session), then match_request.'
 - id: flask-08
   repo: https://github.com/pallets/flask
   question: How does AppContext.pop perform teardown and remove the active context?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/ctx.py
-  notes: Targets context cleanup and teardown.
+    lines:
+    - 446
+    - 504
+    anchor: def pop(self
+  notes: Push-count check, teardown request/appcontext, reset contextvar, popped signal.
 - id: flask-09
   repo: https://github.com/pallets/flask
   question: How does handle_user_exception distinguish HTTP exceptions from other application exceptions?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 806
-    - 837
-  notes: Targets user exception routing.
+    - 880
+    - 914
+    anchor: def handle_user_exception
+  notes: HTTPException -> handle_http_exception; else registered handler or re-raise.
 - id: flask-10
   repo: https://github.com/pallets/flask
   question: How does Flask.handle_exception behave when an unhandled exception occurs, and how does exception propagation
@@ -123,399 +147,653 @@
   category: identifier
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 839
-    - 878
-  notes: Targets unhandled exception handling.
+    - 916
+    - 971
+    anchor: def handle_exception
+  notes: PROPAGATE_EXCEPTIONS/testing/debug re-raise vs 500 + finalize_request.
 - id: flask-11
   repo: https://github.com/pallets/flask
   question: How does finalize_request convert a view result into a response and run response processing?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 965
-    - 997
-  notes: Targets response finalization.
+    - 1056
+    - 1090
+    anchor: def finalize_request
+  notes: make_response + process_response + request_finished signal.
 - id: flask-12
   repo: https://github.com/pallets/flask
   question: How can a before-request callback stop normal endpoint execution by returning a value?
   category: paraphrase
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 1289
-    - 1316
-  notes: Plain-language question about preprocessing short-circuit behavior.
+    - 1409
+    - 1439
+    anchor: def preprocess_request
+  notes: Non-None return from before_request func short-circuits; consumed in full_dispatch_request.
 - id: flask-13
   repo: https://github.com/pallets/flask
   question: How are after-request callbacks executed, and when is the session saved relative to response processing?
   category: paraphrase
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 1318
-    - 1343
-  notes: Targets postprocessing and session persistence ordering.
+    - 1441
+    - 1469
+    anchor: def process_response
+  notes: after_request funcs first, then save_session (lines 1466-1467).
 - id: flask-14
   repo: https://github.com/pallets/flask
   question: How does Flask's default secure-cookie session backend read and validate the incoming session cookie?
   category: paraphrase
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/sessions.py
     lines:
-    - 255
-    - 302
-  notes: Targets default signed-cookie session loading.
+    - 303
+    - 335
+    anchor: def open_session
+  notes: get_signing_serializer + open_session (BadSignature -> empty session).
 - id: flask-15
   repo: https://github.com/pallets/flask
   question: How does the default session backend decide whether to set, update, or delete the response cookie?
   category: paraphrase
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/sessions.py
     lines:
-    - 303
-    - 347
-  notes: Targets outgoing session-cookie behavior.
+    - 337
+    - 385
+    anchor: def save_session
+  - path: src/flask/sessions.py
+    lines:
+    - 233
+    - 247
+    anchor: def should_set_cookie
+  notes: save_session delete/set logic plus should_set_cookie.
 - id: flask-16
   repo: https://github.com/pallets/flask
-  question: Where is the per-request maximum content length exposed, and how is its default tied to application
-    configuration?
+  question: Where is the per-request maximum content length exposed, and how is its default tied to application configuration?
   category: locate
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/wrappers.py
     lines:
-    - 54
-    - 68
-  notes: Targets Request.max_content_length.
+    - 59
+    - 90
+    anchor: def max_content_length
+  notes: Request.max_content_length getter/setter; default from MAX_CONTENT_LENGTH config.
 - id: flask-17
   repo: https://github.com/pallets/flask
   question: How does Flask's Jinja loader search for templates across the application and its blueprints?
   category: paraphrase
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: src/flask/templating.py
     lines:
-    - 34
-    - 58
+    - 49
+    - 62
+    anchor: class DispatchingJinjaLoader
   - path: src/flask/templating.py
     lines:
-    - 81
-    - 89
-  notes: Targets dispatching template loader.
+    - 88
+    - 106
+    anchor: def _get_source_fast
+  notes: DispatchingJinjaLoader.get_source + _get_source_fast + _iter_loaders.
 - id: flask-18
   repo: https://github.com/pallets/flask
-  question: How are request, session, configuration, g, and template context processor values added to a template
-    context?
+  question: How are request, session, configuration, g, and template context processor values added to a template context?
   category: paraphrase
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/app.py
     lines:
-    - 546
-    - 577
+    - 594
+    - 627
+    anchor: def update_template_context
   - path: src/flask/templating.py
     lines:
-    - 20
-    - 32
-  notes: Cross-file template context population.
+    - 21
+    - 33
+    anchor: def _default_template_ctx_processor
+  - path: src/flask/app.py
+    lines:
+    - 492
+    - 503
+    anchor: rv.globals.update(
+  notes: 'Cross-file: context processors, default processor (g/request), env globals (config/session).'
 - id: flask-19
   repo: https://github.com/pallets/flask
   question: How does JSONProvider.response construct a Flask response with the JSON MIME type?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/json/provider.py
     lines:
-    - 83
-    - 98
-  notes: Targets JSONProvider.response.
+    - 89
+    - 105
+    anchor: def response
+  notes: Base JSONProvider.response uses mimetype application/json.
 - id: flask-20
   repo: https://github.com/pallets/flask
   question: Which additional Python data types can Flask's default JSON provider serialize, and how are they converted?
   category: paraphrase
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: src/flask/json/provider.py
     lines:
-    - 101
-    - 128
-  notes: Targets default JSON conversion behavior.
+    - 108
+    - 121
+    anchor: def _default
+  - path: src/flask/json/provider.py
+    lines:
+    - 124
+    - 138
+    anchor: Serializes the following additional data types
+  notes: _default handles date, Decimal, UUID, dataclass, __html__.
 - id: flask-21
   repo: https://github.com/pallets/flask
   question: How can tests send requests to a Flask application without starting a live HTTP server?
   category: docs
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: docs/testing.rst
     lines:
-    - 77
-    - 100
-  notes: Targets documented test-client usage.
+    - 83
+    - 108
+    anchor: The test client makes requests to the application
+  notes: 'Docs: ''Sending Requests with the Test Client''.'
 - id: flask-22
   repo: https://github.com/pallets/flask
   question: How does Flask's test client allow a test to modify its session before making a request?
   category: tests
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/testing.py
     lines:
-    - 126
-    - 148
-  notes: Targets FlaskClient.session_transaction.
+    - 135
+    - 183
+    anchor: def session_transaction
+  notes: FlaskClient.session_transaction context manager.
 - id: flask-23
   repo: https://github.com/pallets/flask
-  question: How does the Flask CLI discover an application when a module contains app, application, or an application
-    factory?
+  question: How does the Flask CLI discover an application when a module contains app, application, or an application factory?
   category: identifier
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: src/flask/cli.py
     lines:
-    - 39
-    - 86
-  notes: Targets find_best_app.
+    - 41
+    - 91
+    anchor: def find_best_app
+  notes: 'find_best_app: app/application names, sole Flask instance, create_app/make_app.'
 - id: flask-24
   repo: https://github.com/pallets/flask
   question: How does with_appcontext ensure that a Flask CLI callback runs with an application context?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: src/flask/cli.py
     lines:
-    - 354
-    - 373
-  notes: Targets with_appcontext.
+    - 380
+    - 402
+    anchor: def with_appcontext
+  notes: Loads app via ScriptInfo and pushes app_context if not current_app.
 - id: flask-25
   repo: https://github.com/pallets/flask
-  question: Which configuration settings control testing behavior, exception propagation, and session signing, and
-    what are their documented defaults?
+  question: Which configuration settings control testing behavior, exception propagation, and session signing, and what are
+    their documented defaults?
   category: config
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: docs/config.rst
     lines:
-    - 74
-    - 115
-  notes: Targets documented TESTING, PROPAGATE_EXCEPTIONS, and SECRET_KEY settings.
+    - 80
+    - 86
+    anchor: '.. py:data:: TESTING'
+  - path: docs/config.rst
+    lines:
+    - 88
+    - 94
+    anchor: '.. py:data:: PROPAGATE_EXCEPTIONS'
+  - path: docs/config.rst
+    lines:
+    - 114
+    - 126
+    anchor: '.. py:data:: SECRET_KEY'
+  notes: TESTING False, PROPAGATE_EXCEPTIONS None, SECRET_KEY None.
 - id: flask-26
   repo: https://github.com/pallets/flask
-  question: Which built-in Flask module implements an ORM with model classes, migrations, and database query sessions?
+  question: Which built-in Flask module implements an ORM with model classes and database query sessions?
   category: unanswerable
   split: heldout
   answerable: false
+  verified: true
   gold: []
-  notes: Flask core does not provide a built-in ORM implementation.
+  notes: Flask core has no ORM (SQLAlchemy only mentioned in a docstring).
 - id: flask-27
   repo: https://github.com/pallets/flask
   question: Where is Flask's built-in WebSocket server and WebSocket connection lifecycle implemented?
   category: unanswerable
   split: tune
   answerable: false
+  verified: true
   gold: []
-  notes: The repository does not implement a built-in WebSocket server.
+  notes: No WebSocket code in src/flask (grep verified).
 - id: flask-28
   repo: https://github.com/pallets/flask
-  question: Which core Flask module provides a persistent background job queue with retry scheduling and worker
-    processes?
+  question: Which core Flask module provides a persistent background job queue with retry scheduling and worker processes?
   category: unanswerable
   split: tune
   answerable: false
+  verified: true
   gold: []
-  notes: Flask core does not provide a built-in background job queue.
+  notes: No job queue; 'worker' only appears in unrelated comments/docstrings.
 - id: flask-29
   repo: https://github.com/pallets/flask
-  question: Where does Flask implement a built-in administrative dashboard for managing application users and database
-    records?
+  question: Where does Flask implement a built-in administrative dashboard for managing application users and database records?
   category: unanswerable
   split: tune
   answerable: false
+  verified: true
   gold: []
-  notes: No built-in admin dashboard is implemented in Flask core.
+  notes: No admin dashboard in Flask core.
 - id: flask-30
   repo: https://github.com/pallets/flask
-  question: Which Flask core module automatically generates and applies database schema migrations for application
-    models?
+  question: Which Flask core module validates submitted form fields and renders HTML form widgets?
   category: unanswerable
   split: tune
   answerable: false
+  verified: true
   gold: []
-  notes: Flask core does not include an ORM migration engine.
+  notes: Near-miss (request.form exists but no field validation/widgets; WTForms is external). Replaces a duplicate ORM/migrations
+    question.
+- id: flask-31
+  repo: https://github.com/pallets/flask
+  question: What happens when someone visits a URL that doesn't match any route or uses the wrong HTTP method?
+  category: paraphrase
+  split: tune
+  answerable: true
+  verified: true
+  gold:
+  - path: src/flask/ctx.py
+    lines:
+    - 405
+    - 414
+    anchor: def match_request
+  - path: src/flask/app.py
+    lines:
+    - 1007
+    - 1010
+    anchor: self.raise_routing_exception(req)
+  - path: src/flask/app.py
+    lines:
+    - 566
+    - 592
+    anchor: raise request.routing_exception
+  notes: 'Natural-language: match_request stores routing_exception; dispatch_request raises it.'
+- id: flask-32
+  repo: https://github.com/pallets/flask
+  question: How does Flask turn a string, dictionary, or tuple returned from a view into a real HTTP response?
+  category: paraphrase
+  split: tune
+  answerable: true
+  verified: true
+  gold:
+  - path: src/flask/app.py
+    lines:
+    - 1267
+    - 1407
+    anchor: def make_response
+  notes: 'Natural-language: make_response handling of tuple/str/dict/list/Response.'
+- id: flask-33
+  repo: https://github.com/pallets/flask
+  question: How does the command-line debug switch get turned on for the development server?
+  category: paraphrase
+  split: tune
+  answerable: true
+  verified: true
+  gold:
+  - path: src/flask/cli.py
+    lines:
+    - 468
+    - 482
+    anchor: FLASK_DEBUG
+  - path: src/flask/cli.py
+    lines:
+    - 485
+    - 490
+    anchor: --debug/--no-debug
+  notes: 'Natural-language: --debug option callback sets FLASK_DEBUG env var.'
+- id: flask-34
+  repo: https://github.com/pallets/flask
+  question: How does Flask serve files from the static folder, and how long do browsers cache them?
+  category: paraphrase
+  split: tune
+  answerable: true
+  verified: true
+  gold:
+  - path: src/flask/app.py
+    lines:
+    - 363
+    - 410
+    anchor: def send_static_file
+  notes: 'Natural-language: send_static_file + get_send_file_max_age (SEND_FILE_MAX_AGE_DEFAULT).'
+- id: flask-35
+  repo: https://github.com/pallets/flask
+  question: Where does Flask limit how many requests a client can send per minute and block clients that exceed it?
+  category: unanswerable
+  split: tune
+  answerable: false
+  verified: true
+  gold: []
+  notes: 'Near-miss: related to request limits (MAX_CONTENT_LENGTH) but no rate limiting (grep verified).'
+- id: flask-36
+  repo: https://github.com/pallets/flask
+  question: Which Flask module handles user login, password hashing, and account authentication?
+  category: unanswerable
+  split: heldout
+  answerable: false
+  verified: true
+  gold: []
+  notes: 'Near-miss: sessions exist but no authentication/password code (grep verified).'
 - id: nft-01
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
-  question: How does ChainfolkAvatarNft.mint validate the token URI, allocate a token ID, mint the NFT, and store
-    its metadata URI?
+  question: How does ChainfolkAvatarNft.mint validate the token URI, allocate a token ID, mint the NFT, and store its metadata
+    URI?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: contracts/ChainfolkAvatarNft.sol
     lines:
-    - 19
-    - 28
-  notes: Targets the public ERC-721 mint implementation.
+    - 21
+    - 31
+    anchor: function mint(
+  notes: 'mint(): empty-URI require, _nextTokenId++, _safeMint, _setTokenURI, TokenMinted event.'
 - id: nft-02
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
   question: How do pause and unpause restrict minting, and which account is authorized to invoke them?
   category: paraphrase
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: contracts/ChainfolkAvatarNft.sol
     lines:
+    - 33
+    - 34
+    anchor: function pause()
+  - path: contracts/ChainfolkAvatarNft.sol
+    lines:
+    - 23
+    - 23
+    anchor: whenNotPaused
+  - path: contracts/ChainfolkAvatarNft.sol
+    lines:
+    - 16
     - 19
-    - 31
-  notes: Targets Pausable and Ownable contract controls.
+    anchor: Ownable(initialOwner)
+  notes: onlyOwner pause/unpause; mint is whenNotPaused; owner set in constructor.
 - id: nft-03
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
-  question: How does uploadToPinata.mjs validate local image references and upload image files and JSON metadata
-    to IPFS?
+  question: How does uploadToPinata.mjs validate local image references and upload image files and JSON metadata to IPFS?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: scripts/uploadToPinata.mjs
     lines:
-    - 17
-    - 36
+    - 18
+    - 25
+    anchor: const imageFor
   - path: scripts/uploadToPinata.mjs
     lines:
+    - 26
     - 38
-    - 61
-  notes: Targets image validation and Pinata upload pipeline.
+    anchor: async function pinFile
+  - path: scripts/uploadToPinata.mjs
+    lines:
+    - 44
+    - 63
+    anchor: pinJson(metadata, metadataName)
+  notes: imageFor validation, pinFile/pinJson helpers, image loop and metadata loop in main().
 - id: nft-04
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
-  question: Trace how the upload script turns source NFT images and metadata into the frontend catalog consumed
-    by the application.
+  question: Trace how the upload script turns source NFT images and metadata into the frontend catalog consumed by the application.
   category: trace_flow
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: scripts/uploadToPinata.mjs
     lines:
-    - 38
+    - 49
     - 66
+    anchor: records.push(
   - path: app/src/app/data/nftsData.ts
     lines:
     - 1
-    - 33
-  notes: Cross-file metadata upload and generated catalog.
+    - 4
+    anchor: Generated by scripts/uploadToPinata.mjs
+  - path: app/src/app/data/nftsData.ts
+    lines:
+    - 365
+    - 367
+    anchor: export default NFTS
+  notes: 'Cross-file: records written to nftsData.ts (generated) and default-exported.'
 - id: nft-05
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
-  question: How does the deployment script select a BOT Chain network, deploy the contract, wait for its receipt,
-    and write deployment records?
+  question: How does the deployment script select a BOT Chain network, deploy the contract, wait for its receipt, and write
+    deployment records?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: scripts/deployChainfolkAvatarNft.ts
     lines:
     - 9
-    - 26
+    - 27
+    anchor: const networkName
   - path: src/networks.ts
     lines:
     - 1
     - 4
-  notes: Targets deployment script and network definitions.
+    anchor: export const botTestnet
+  notes: Network pick from argv, deployContract, waitForTransactionReceipt, JSON records in two dirs.
 - id: nft-06
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
   question: How does the frontend determine the connected chain, select the NFT to mint, and invoke the mint hook?
   category: paraphrase
   split: heldout
   answerable: true
+  verified: true
   gold:
   - path: app/src/app/page.tsx
     lines:
-    - 14
-    - 40
+    - 17
+    - 20
+    anchor: const mint = useMint()
   - path: app/src/app/page.tsx
     lines:
-    - 60
-    - 70
+    - 42
+    - 44
+    anchor: const networkName
+  - path: app/src/app/page.tsx
+    lines:
+    - 66
+    - 77
+    anchor: onMint={() =>
   - path: app/src/app/hooks/useMint.ts
     lines:
-    - 23
-    - 34
+    - 31
+    - 35
+    anchor: const deployment = deployments[chainId]
   - path: app/src/app/hooks/useMint.ts
     lines:
-    - 64
-    - 67
-  notes: Cross-file frontend selection and mint invocation.
+    - 72
+    - 75
+    anchor: 'function mint(nft: NFT)'
+  notes: 'Cross-file: chain lookup in useMint, selected NFT in page.tsx, writeContract mint call.'
 - id: nft-07
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
-  question: How does useMint determine whether a transaction is pending, confirming, successful, rejected, or reverted,
-    and how does it extract the minted token ID?
+  question: How does useMint determine whether a transaction is pending, confirming, successful, rejected, or reverted, and
+    how does it extract the minted token ID?
   category: identifier
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: app/src/app/hooks/useMint.ts
     lines:
-    - 21
-    - 56
+    - 13
+    - 20
+    anchor: const transferAbi
   - path: app/src/app/hooks/useMint.ts
     lines:
-    - 58
-    - 67
-  notes: Targets transaction lifecycle and Transfer event parsing.
+    - 40
+    - 57
+    anchor: 'let status: MintStatus'
+  - path: app/src/app/hooks/useMint.ts
+    lines:
+    - 59
+    - 63
+    anchor: parseEventLogs
+  notes: Status state machine and Transfer log parsing for tokenId.
 - id: nft-08
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
-  question: Which configuration values and chain settings are needed to connect the frontend and deployment scripts
-    to BOT Chain testnet and mainnet?
+  question: Which configuration values and chain settings are needed to connect the frontend and deployment scripts to BOT
+    Chain testnet and mainnet?
   category: config
   split: tune
   answerable: true
+  verified: true
   gold:
   - path: hardhat.config.cjs
     lines:
-    - 3
-    - 17
+    - 9
+    - 18
+    anchor: '''bot-chain-testnet'''
   - path: src/networks.ts
     lines:
-    - 1
-    - 4
+    - 2
+    - 3
+    anchor: 'id: 968'
+  - path: app/src/app/config/chainfolkAvatarNft.ts
+    lines:
+    - 13
+    - 24
+    anchor: NEXT_PUBLIC_CHAINFOLK_TESTNET_CONTRACT_ADDRESS
   - path: README.md
     lines:
-    - 48
-    - 65
-  notes: Cross-file chain IDs, RPCs, and environment configuration.
+    - 54
+    - 72
+    anchor: NEXT_PUBLIC_CHAINFOLK_MAINNET_CONTRACT_ADDRESS
+  notes: Chain IDs 968/677, RPCs, env vars (DEPLOYER_PRIVATE_KEY, PINATA_JWT, NEXT_PUBLIC_*).
 - id: nft-09
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
-  question: Where does the smart contract calculate and distribute ERC-2981 royalties to NFT creators on every secondary
-    sale?
+  question: Where does the smart contract calculate and distribute ERC-2981 royalties to NFT creators on every secondary sale?
   category: unanswerable
   split: tune
   answerable: false
+  verified: true
   gold: []
-  notes: The contract does not implement ERC-2981 royalty support or secondary-sale distribution.
+  notes: No ERC-2981/royalty code anywhere in repo (grep verified).
 - id: nft-10
   repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
   question: Which contract function verifies a Merkle proof and enforces an allowlist before allowing an NFT mint?
   category: unanswerable
   split: tune
   answerable: false
+  verified: true
   gold: []
-  notes: The public mint contract has no allowlist or Merkle-proof verification.
+  notes: mint() has no allowlist/Merkle logic (grep verified).
+- id: nft-11
+  repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
+  question: What does the website tell a visitor whose wallet is connected to a chain the app doesn't support?
+  category: paraphrase
+  split: tune
+  answerable: true
+  verified: true
+  gold:
+  - path: app/src/app/components/Header.tsx
+    lines:
+    - 41
+    - 60
+    anchor: export function NetworkNotice
+  - path: app/src/app/hooks/useMint.ts
+    lines:
+    - 35
+    - 35
+    anchor: const wrongNetwork
+  notes: 'Natural-language: NetworkNotice banner + switch-network button; wrongNetwork flag.'
+- id: nft-12
+  repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
+  question: How do I get the deployed contract's source code verified on the BOT Chain block explorer?
+  category: docs
+  split: heldout
+  answerable: true
+  verified: true
+  gold:
+  - path: README.md
+    lines:
+    - 146
+    - 158
+    anchor: npm run verify:mainnet
+  - path: hardhat.config.cjs
+    lines:
+    - 19
+    - 42
+    anchor: customChains
+  notes: 'Natural-language: README verification steps + hardhat etherscan customChains.'
+- id: nft-13
+  repo: https://github.com/rahuldindigala-32/avatar-nft-minter-bot-chain
+  question: Where does the contract enforce a per-wallet mint limit or a maximum total supply?
+  category: unanswerable
+  split: tune
+  answerable: false
+  verified: true
+  gold: []
+  notes: 'Near-miss: contract header/mint docs (lines 10, 22) state no wallet or supply cap exists.'

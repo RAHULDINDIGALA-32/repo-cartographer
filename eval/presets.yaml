@@ -30,16 +30,31 @@ hybrid3_llm:
   hybrid_sources: [dense, sparse, symbol]
   analysis: llm
   reranker: none
+  analyzer:
+    provider: groq
+    model: openai/gpt-oss-120b
+    temperature: 0.0
+    max_tokens: 300
 hybrid3_llm_rerank:
   retriever: hybrid
   hybrid_sources: [dense, sparse, symbol]
   analysis: llm
   reranker: voyage
+  analyzer:
+    provider: groq
+    model: openai/gpt-oss-120b
+    temperature: 0.0
+    max_tokens: 300
 hybrid3_llm_rerank_priors:
   retriever: hybrid
   hybrid_sources: [dense, sparse, symbol]
   analysis: llm
   reranker: voyage
+  analyzer:
+    provider: groq
+    model: openai/gpt-oss-120b
+    temperature: 0.0
+    max_tokens: 300
   priors:
     test_multiplier: 0.8
     header_multiplier: 0.9
@@ -49,6 +64,11 @@ hybrid3_llm_rerank_priors_asm:
   hybrid_sources: [dense, sparse, symbol]
   analysis: llm
   reranker: voyage
+  analyzer:
+    provider: groq
+    model: openai/gpt-oss-120b
+    temperature: 0.0
+    max_tokens: 300
   assembler:
     name: default
     max_chunks_per_file: 3
