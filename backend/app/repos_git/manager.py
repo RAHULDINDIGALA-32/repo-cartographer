@@ -128,6 +128,10 @@ class RepoManager:
                 last_checked_at=__import__("datetime").datetime.now(
                     __import__("datetime").timezone.utc
                 ),
+                remote_sha=info.head_sha,
+                remote_checked_at=__import__("datetime").datetime.now(
+                    __import__("datetime").timezone.utc
+                ),
             )
         return RemoteCheck(
             remote_sha=info.head_sha,

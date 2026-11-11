@@ -25,13 +25,13 @@ class IndexWriter:
         self.embedding_dim = embedding_dim
 
     async def start_run(
-        self, repo_id: int, from_sha: str | None, to_sha: str, config_snapshot: dict
+        self, repo_id: int, from_sha: str | None, to_sha: str, config_snapshot: dict, *, job_id: int | None = None
     ) -> int:
         async with self.db.transaction() as conn:
             cur = await conn.execute(
-                f"INSERT INTO {self.schema}.index_runs(repo_id,from_sha,to_sha,status,config_snapshot) "
-                "VALUES (%s,%s,%s,'running',%s) RETURNING id",
-                (repo_id, from_sha, to_sha, Jsonb(config_snapshot)),
+                f"INSERT INTO {self.schema}.index_runs(repo_id,job_id,from_sha,to_sha,status,config_snapshot) "
+                "VALUES (%s,%s,%s,%s,'running',%s) RETURNING id",
+                (repo_id, job_id, from_sha, to_sha, Jsonb(config_snapshot)),
             )
             return (await cur.fetchone())[0]
 
@@ -248,3 +248,7 @@ class IndexWriter:
                 f"UPDATE {self.schema}.repos SET status='ready',indexed_sha=%s,indexed_at=now(),last_error=NULL,updated_at=now() WHERE id=%s",
                 (head_sha, repo_id),
             )
+
+    async def mark_indexing(self, repo_id: int) -> None:
+        async with self.db.transaction() as conn:
+            await conn.execute(f"UPDATE {self.schema}.repos SET status='indexing',last_error=NULL,updated_at=now() WHERE id=%s", (repo_id,))

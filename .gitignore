@@ -1,13 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[codz]
-*$py.class
-
-# C extensions
-*.so
-
-# Dev files
-docs
+*.pydocs
 scripts
 */.test-data
 */.tree-sitter-cache
@@ -154,6 +147,9 @@ activemq-data/
 
 # SageMath parsed files
 *.sage.py
+
+# Dev Files
+docs/
 
 # Environments
 .env

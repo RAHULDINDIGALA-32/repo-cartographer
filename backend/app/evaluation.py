@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -132,6 +133,49 @@ def retrieval_metrics(
         }
     ) / len(gold)
     return result
+
+
+def bootstrap_ci(values: list[float], *, seed: int = 17, samples: int = 2000) -> list[float] | None:
+    """Deterministic percentile bootstrap interval for small evaluation sets."""
+    if not values:
+        return None
+    rng = random.Random(seed)
+    means = [sum(rng.choice(values) for _ in values) / len(values) for _ in range(samples)]
+    means.sort()
+    return [means[int(0.025 * (samples - 1))], means[int(0.975 * (samples - 1))]]
+
+
+def paired_comparison(
+    candidate: list[dict], baseline: list[dict], metric: str = "hit@5"
+) -> dict[str, int]:
+    left = {row["id"]: row.get("metrics", {}).get(metric, 0) for row in candidate}
+    right = {row["id"]: row.get("metrics", {}).get(metric, 0) for row in baseline}
+    shared = sorted(left.keys() & right.keys())
+    return {
+        "wins": sum(left[item] > right[item] for item in shared),
+        "losses": sum(left[item] < right[item] for item in shared),
+        "ties": sum(left[item] == right[item] for item in shared),
+        "questions": len(shared),
+    }
+
+
+def evaluation_summary(rows: list[dict], *, stage: str = "metrics") -> dict[str, Any]:
+    key = "ranked_metrics" if stage == "ranked" else "metrics"
+    answerable = [
+        row[key]
+        for row in rows
+        if "error" not in row and row.get(key, {}).get("answerable")
+    ]
+    summary: dict[str, Any] = {"stage": stage, "answerable": len(answerable)}
+    for metric in ("hit@5", "mrr", "context_recall"):
+        values = [float(row[metric]) for row in answerable if metric in row]
+        if values:
+            summary[metric] = {
+                "mean": sum(values) / len(values),
+                "count": len(values),
+                "ci95": bootstrap_ci(values),
+            }
+    return summary
 
 
 @dataclass

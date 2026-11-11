@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from psycopg.types.json import Jsonb
 
@@ -9,7 +11,9 @@ from app.config.pipeline import PipelineConfig
 from app.core.errors import ConflictError, NotFoundError
 from app.generation.citations import CitationParser, validate_citations
 from app.interfaces.registry import build_pipeline
+from app.jobs.service import RepoService
 from app.models import QueryAnalysis
+from app.repos_git.manager import RepoManager
 from app.retrieval.priors import apply_priors
 
 
@@ -24,9 +28,12 @@ class QueryOptions:
     retriever: str | None = None
     rerank: bool | None = None
     trace: bool = False
+    evaluation: bool = False
 
 
 class QueryEngine:
+    _staleness_tasks: dict[int, asyncio.Task] = {}
+
     def __init__(self, db, settings, config: PipelineConfig | None = None, *, pipeline=None):
         self.db = db
         self.settings = settings
@@ -37,7 +44,9 @@ class QueryEngine:
     async def _repo(self, repo_id: int):
         async with self.db.connection() as conn:
             cur = await conn.execute(
-                f"SELECT owner,name,status,indexed_sha,indexed_at FROM {self.schema}.repos WHERE id=%s",
+                f"""SELECT owner,name,status,indexed_sha,indexed_at,remote_sha,remote_checked_at,pinned,
+                    (SELECT status FROM {self.schema}.jobs j WHERE j.repo_id=repos.id AND j.status IN ('pending','running') ORDER BY j.id DESC LIMIT 1)
+                    FROM {self.schema}.repos WHERE id=%s""",
                 (repo_id,),
             )
             row = await cur.fetchone()
@@ -46,6 +55,80 @@ class QueryEngine:
         if row[2] != "ready":
             raise ConflictError("Repository is not ready for querying")
         return row
+
+    async def _staleness(self, repo_id: int, state: tuple) -> dict:
+        indexed_sha, indexed_at, remote_sha, remote_checked_at, pinned, active_job = state[3:]
+        sync = (
+            "running"
+            if active_job == "running"
+            else "queued"
+            if active_job == "pending"
+            else "none"
+        )
+        current = {
+            "indexed_sha": indexed_sha,
+            "indexed_at": indexed_at,
+            "remote_sha": remote_sha,
+            "remote_checked_at": remote_checked_at,
+            "is_stale": None,
+            "sync": sync,
+            "message": "freshness unknown",
+        }
+        if pinned:
+            current.update(
+                is_stale=remote_sha is not None and remote_sha != indexed_sha,
+                message="pinned repository; automatic checking disabled",
+            )
+            return current
+        age = (
+            None
+            if remote_checked_at is None
+            else (datetime.now(UTC) - remote_checked_at).total_seconds()
+        )
+        task = self._staleness_tasks.get(repo_id)
+        if task is None and (age is None or age >= self.settings.staleness_ttl_seconds):
+            task = asyncio.create_task(self._remote_check(repo_id))
+            self._staleness_tasks[repo_id] = task
+        if task is not None:
+            try:
+                result, queued_status = await asyncio.wait_for(
+                    asyncio.shield(task), self.settings.staleness_wait_ms / 1000
+                )
+                self._staleness_tasks.pop(repo_id, None)
+                current.update(
+                    remote_sha=result.remote_sha,
+                    remote_checked_at=datetime.now(UTC),
+                    is_stale=result.is_stale,
+                )
+                if result.is_stale and queued_status:
+                    current["sync"] = queued_status
+            except TimeoutError:
+                pass
+            except Exception:
+                self._staleness_tasks.pop(repo_id, None)
+        if current["is_stale"] is None and remote_sha is not None:
+            current["is_stale"] = remote_sha != indexed_sha
+        if current["is_stale"]:
+            current["message"] = (
+                f"answered from commit {(indexed_sha or 'unknown')[:8]}; a newer commit exists"
+            )
+        elif current["is_stale"] is False:
+            current["message"] = "index is current"
+        return current
+
+    async def _remote_check(self, repo_id: int):
+        """Complete a lazy check even when the answer timed out waiting for it."""
+        manager = RepoManager(self.db, self.settings, self.config)
+        result = await manager.check_remote(repo_id)
+        queued_status = None
+        if result.is_stale:
+            queued = await RepoService(self.db, self.settings).enqueue_sync(repo_id, "lazy_check")
+            queued_status = (
+                "queued"
+                if queued.created or queued.reason == "coalesced"
+                else "refused_budget"
+            )
+        return result, queued_status
 
     async def _log(self, payload: dict) -> int | None:
         async with self.db.transaction() as conn:
@@ -84,7 +167,14 @@ class QueryEngine:
             if not question.strip() or len(question) > self.config.max_question_chars:
                 raise ValueError(f"question must be 1-{self.config.max_question_chars} characters")
             db_started = time.perf_counter()
-            owner, name, _, indexed_sha, indexed_at = await self._repo(repo_id)
+            repo_state = await self._repo(repo_id)
+            owner, name, _, indexed_sha, indexed_at = repo_state[:5]
+            staleness_started = time.perf_counter()
+            staleness = await self._staleness(repo_id, repo_state)
+            payload["staleness"] = staleness
+            payload["latencies_ms"]["staleness_wait"] = round(
+                (time.perf_counter() - staleness_started) * 1000
+            )
             payload["latencies_ms"]["db_acquire"] = round((time.perf_counter() - db_started) * 1000)
             t = time.perf_counter()
             analyzer = self.pipeline.stages.get("analyzer")
@@ -111,6 +201,8 @@ class QueryEngine:
                     if retriever.name == "sparse"
                     else self.config.top_k_symbol
                     if retriever.name == "symbol"
+                    else self.config.top_k_sparse
+                    if retriever.name == "bm25"
                     else self.config.top_k_dense
                 )
             )
@@ -129,28 +221,31 @@ class QueryEngine:
             payload["latencies_ms"].update(getattr(retriever, "last_latencies", {}))
             if getattr(retriever, "degraded", None):
                 payload["trace"]["degraded"].extend(retriever.degraded)
-            if retriever.name in {"hybrid", "dense", "sparse", "symbol"}:
+            if retriever.name in {"hybrid", "dense", "sparse", "symbol", "bm25"}:
                 hits, applied_priors = apply_priors(hits, analysis, self.config)
                 payload["trace"]["priors"] = applied_priors
             payload["indexed_sha"] = retriever.last_indexed_sha or indexed_sha
             payload["retrieved_ids"] = [hit.chunk.id for hit in hits]
             reranker = self.pipeline.stages.get("reranker")
-            final_hits = (
+            ranked_hits = (
                 await reranker.rerank(
-                    analysis.rewritten_query, hits, options.top_k or self.config.top_k_final
+                    analysis.rewritten_query,
+                    hits,
+                    len(hits) if options.evaluation else options.top_k or self.config.top_k_final,
                 )
                 if reranker
-                else hits[: self.config.top_k_final]
+                else hits
             )
             if getattr(reranker, "degraded", False):
                 payload["trace"]["degraded"].append("reranker")
             payload["trace"]["reranked"] = [
-                {"id": hit.chunk.id, "score": hit.score, "rank": hit.rank} for hit in final_hits
+                {"id": hit.chunk.id, "score": hit.score, "rank": hit.rank} for hit in ranked_hits
             ]
-            payload["final_ids"] = [hit.chunk.id for hit in final_hits]
+            payload["final_ids"] = [hit.chunk.id for hit in ranked_hits[: self.config.top_k_final]]
             assembler = self.pipeline.stages["assembler"]
-            expanded = await assembler.expand(final_hits) if hasattr(assembler, "expand") else []
-            blocks = assembler.assemble(final_hits + expanded, self.config.context_token_budget)
+            assembly_hits = ranked_hits[: self.config.top_k_final]
+            expanded = await assembler.expand(assembly_hits) if hasattr(assembler, "expand") else []
+            blocks = assembler.assemble(assembly_hits + expanded, self.config.context_token_budget)
             payload["trace"]["assembly"] = getattr(assembler, "last_report", {})
             yield {
                 "kind": "retrieval",
@@ -172,6 +267,17 @@ class QueryEngine:
                 "kept": len(blocks),
                 "dropped": getattr(assembler, "last_report", {}).get("dropped", 0),
                 "context": [block.model_dump(mode="json") for block in blocks],
+                "ranked": [
+                    {
+                        "chunk_id": h.chunk.id,
+                        "path": h.chunk.path,
+                        "start_line": h.chunk.start_line,
+                        "end_line": h.chunk.end_line,
+                        "score": h.score,
+                        "rank": h.rank,
+                    }
+                    for h in ranked_hits
+                ],
             }
             if options.no_generate:
                 payload["latencies_ms"]["total"] = round((time.perf_counter() - started) * 1000)
@@ -184,9 +290,10 @@ class QueryEngine:
                     "tokens_out": None,
                     "indexed_sha": payload["indexed_sha"],
                     "indexed_at": indexed_at,
+                    "staleness": staleness,
                     "query_log_id": payload["query_log_id"],
                     "degraded": payload["trace"].get("degraded", []),
-                    "trace": payload["trace"] if options.trace else None,
+                    "trace": payload["trace"] if options.trace or options.evaluation else None,
                 }
                 return
             generator = self.pipeline.stages["generator"]
@@ -200,6 +307,8 @@ class QueryEngine:
                     answer += text
                     parser.feed(text)
                     yield {"kind": "token", "text": text}
+                elif event.kind == "status":
+                    yield {"kind": "status", "text": "thinking"}
                 elif event.kind == "error":
                     payload["error"] = f"{event.code}: {event.message}"
                     payload["answer"] = answer
@@ -223,6 +332,12 @@ class QueryEngine:
             }
             payload["latencies_ms"].update(
                 first_token=generator_stats.get("first_token_ms", 0),
+                first_progress=generator_stats.get(
+                    "first_progress_ms", generator_stats.get("first_token_ms", 0)
+                ),
+                first_visible_token=generator_stats.get(
+                    "first_visible_token_ms", generator_stats.get("first_token_ms", 0)
+                ),
                 generate_total=generator_stats.get("total_ms", 0),
                 total=round((time.perf_counter() - started) * 1000),
                 provider=generator_stats.get("provider"),
@@ -244,9 +359,10 @@ class QueryEngine:
                 "truncated": generator_stats.get("truncated", False),
                 "indexed_sha": payload["indexed_sha"],
                 "indexed_at": indexed_at,
+                "staleness": staleness,
                 "query_log_id": payload["query_log_id"],
                 "degraded": payload["trace"].get("degraded", []),
-                "trace": payload["trace"] if options.trace else None,
+                "trace": payload["trace"] if options.trace or options.evaluation else None,
             }
         except Exception as exc:
             payload["error"] = str(exc)

@@ -13,6 +13,7 @@ class LLMSpec(BaseModel):
     model: str = Field(min_length=1)
     temperature: float | None = Field(default=None, ge=0, le=2)
     max_tokens: int = Field(gt=0)
+    reasoning_effort: Literal["low", "medium", "high"] | None = None
 
     @model_validator(mode="after")
     def validate_provider(self):
@@ -60,12 +61,19 @@ class PipelineConfig(BaseModel):
     embedding_dim: int = Field(1024, gt=0)
     analyzer: LLMSpec | None = None
     analysis: Literal["none", "rule", "llm"] = "none"
-    retriever: Literal["dense", "sparse", "symbol", "hybrid"] = "dense"
-    hybrid_sources: list[Literal["dense", "sparse", "symbol"]] = ["dense", "sparse", "symbol"]
+    retriever: Literal["dense", "sparse", "symbol", "bm25", "hybrid"] = "dense"
+    bm25_k1: float = Field(1.2, gt=0)
+    bm25_b: float = Field(0.75, ge=0, le=1)
+    hybrid_sources: list[Literal["dense", "sparse", "bm25", "symbol"]] = [
+        "dense",
+        "sparse",
+        "symbol",
+    ]
     fusion_weights: dict[str, float] = {
         "dense": 1.0,
         "dense_sub": 1.0,
         "sparse": 1.0,
+        "bm25": 1.0,
         "symbol": 1.0,
     }
     fusion: str = "rrf"

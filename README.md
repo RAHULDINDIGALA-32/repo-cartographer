@@ -110,3 +110,25 @@ The active generator is an `LLMSpec` in `config.yaml`; it contains only the prov
 
 Groq and OpenRouter are OpenAI-compatible but have different model catalogs, limits, and data-routing policies. OpenRouter free variants may route through third-party providers with different retention policies; use them only for public repository data and verify the selected model/provider policy before use. Changing the embedding provider remains a re-indexing operation because it changes `embedder_version` and vector dimension.
 
+## Retrieval results
+
+B5c adds BM25 and explicit ranked-stage evaluation, but the project does not claim a new default until the post-change tune, heldout, and NFT runs are complete. The existing evidence showed dense retrieval outperforming the measured hybrid presets on the small Flask set; this is not a general benchmark. The gold set is small, famous-repository analyzer leakage is possible, and refusal thresholds are not calibrated. Use the compact evaluator output and paired confidence intervals when selecting a default.
+
+## Automatic freshness
+
+B7 stores repository remote-head observations and uses a Postgres-backed job queue. Sync requests coalesce per repository, workers claim jobs with row locks, heartbeat while indexing, retry retryable failures with backoff, and the reaper returns abandoned work to `pending`. Lazy query checks are TTL-limited and bounded by `staleness_wait_ms`; a timeout does not block the answer, and the completed check can still enqueue a sync. Pinned repositories never receive automatic checks. Scheduler and lazy triggers respect the daily token budget; manual jobs remain available for operators.
+
+Useful operational commands are:
+
+```text
+uv run cartographer jobs list --json
+uv run cartographer jobs enqueue <repo_id>
+uv run cartographer worker run --once
+uv run cartographer scheduler tick --dry-run
+uv run cartographer scheduler status
+uv run cartographer jobs reap
+uv run cartographer jobs prune
+```
+
+The current worker is an in-process polling worker and the scheduler is polling-based; this phase does not provide webhooks, distributed workers, commit-distance reporting, or mid-run cancellation.
+

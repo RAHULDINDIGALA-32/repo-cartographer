@@ -17,13 +17,17 @@ from app.core.errors import AppError
 from app.core.logging import bind_context, configure_logging
 from app.db.migrate import MigrationRunner
 from app.db.pool import Database
-from app.evaluation import retrieval_metrics, validate_questions
+from app.evaluation import evaluation_summary, retrieval_metrics, validate_questions
 from app.generation.engine import QueryEngine, QueryOptions
 from app.ingestion.chunkers import AstChunker, FixedChunker
 from app.ingestion.chunkers.ast import tree_dump
 from app.ingestion.chunkers.tokens import tokenizer_identity
 from app.ingestion.indexer import Indexer, IndexOptions
 from app.interfaces.registry import build_pipeline
+from app.jobs.repository import JobRepository
+from app.jobs.scheduler import Scheduler
+from app.jobs.service import RepoService
+from app.jobs.worker import Worker
 from app.providers.ping import ping_provider
 from app.providers.profiles import PROFILES
 from app.repos_git.manager import RepoManager
@@ -46,6 +50,12 @@ provider_app = typer.Typer()
 app.add_typer(provider_app, name="provider")
 eval_app = typer.Typer()
 app.add_typer(eval_app, name="eval")
+jobs_app = typer.Typer()
+app.add_typer(jobs_app, name="jobs")
+worker_app = typer.Typer()
+app.add_typer(worker_app, name="worker")
+scheduler_app = typer.Typer()
+app.add_typer(scheduler_app, name="scheduler")
 
 
 def load_settings():
@@ -144,7 +154,9 @@ def eval_retrieval(
                     events = [
                         event
                         async for event in engine.ask(
-                            repo_id, item["question"], QueryOptions(no_generate=True)
+                            repo_id,
+                            item["question"],
+                            QueryOptions(no_generate=True, evaluation=True),
                         )
                     ]
                 except Exception as exc:
@@ -155,15 +167,23 @@ def eval_retrieval(
                     rows.append({"id": item["id"], "error": error.get("message", "query failed")})
                     continue
                 retrieval = next((event for event in events if event["kind"] == "retrieval"), None)
+                done = next((event for event in events if event["kind"] == "done"), {})
                 hit_values = retrieval.get("hits", []) if retrieval else []
+                ranked_values = retrieval.get("ranked", hit_values) if retrieval else []
                 context_values = retrieval.get("context", []) if retrieval else []
                 rows.append(
                     {
                         "id": item["id"],
+                        "category": item.get("category"),
                         "metrics": retrieval_metrics(
                             hit_values, item.get("gold", []), context_values
                         ),
+                        "ranked_metrics": retrieval_metrics(
+                            ranked_values, item.get("gold", []), context_values
+                        ),
                         "retrieval": retrieval,
+                        "analysis": (done.get("trace") or {}).get("analysis", {}),
+                        "degraded": (done.get("degraded") or []),
                     }
                 )
         finally:
@@ -178,6 +198,15 @@ def eval_retrieval(
             "errored": sum("error" in row for row in rows),
             "skipped_unverified_or_other_repo": len(values) - len(questions),
             "rows": rows,
+            "summary": {
+                "retrieved": evaluation_summary(rows, stage="retrieved"),
+                "ranked": evaluation_summary(rows, stage="ranked"),
+                "analysis_sources": {
+                    source: sum(row.get("analysis", {}).get("source") == source for row in rows)
+                    for source in ("none", "rule", "llm")
+                },
+                "degraded_questions": sum(bool(row.get("degraded")) for row in rows),
+            },
         }
         typer.echo(json.dumps(result, default=str, sort_keys=True))
         if output:
@@ -378,6 +407,7 @@ def _repo_pin_command(repo_id: int, pinned: bool):
             cli_error(exc)
         finally:
             await d.close()
+
     run_async(run())
 
 
@@ -597,6 +627,11 @@ def ask_run(
                     if validation.get("uncited_answer") or validation.get("invalid"):
                         typer.echo("WARNING: citation validation found an issue.", err=True)
                 elif event["kind"] == "done":
+                    staleness = event.get("staleness") or {}
+                    if staleness.get("is_stale"):
+                        typer.echo(
+                            f"NOTE: {staleness.get('message')}; sync {staleness.get('sync')}."
+                        )
                     typer.echo(
                         "\n"
                         + json.dumps(
@@ -701,8 +736,14 @@ def index_run(
                 typer.echo(json.dumps(estimate, default=str, sort_keys=True))
                 if not typer.confirm("Proceed with indexing?"):
                     raise typer.Abort()
-            result = await service.index_repo(repo_id, IndexOptions(fetch=fetch, chunker=chunker, no_fetch=not fetch))
-            typer.echo(json.dumps(result, default=str, sort_keys=True))
+            queued = await RepoService(d, s).enqueue_sync(repo_id, "manual", force=True)
+            if not queued.created:
+                typer.echo(json.dumps(queued.__dict__, sort_keys=True))
+                return
+            await Worker(repo_manager(s, d), s).run_once(
+                IndexOptions(force=True, no_fetch=False)
+            )
+            typer.echo(json.dumps({"job_id": queued.job_id, "status": "processed"}, sort_keys=True))
         except AppError as exc:
             cli_error(exc)
         finally:
@@ -712,23 +753,40 @@ def index_run(
 
 
 @index_app.command("plan")
-def index_plan(repo_id: int, force: bool = typer.Option(False, "--force"), no_fetch: bool = typer.Option(False, "--no-fetch")):
+def index_plan(
+    repo_id: int,
+    force: bool = typer.Option(False, "--force"),
+    no_fetch: bool = typer.Option(False, "--no-fetch"),
+):
     async def run():
-        s = load_settings(); d = Database(s); await d.open()
+        s = load_settings()
+        d = Database(s)
+        await d.open()
         try:
-            result = await make_indexer(s, d).plan(repo_id, IndexOptions(force=force, no_fetch=no_fetch))
+            result = await make_indexer(s, d).plan(
+                repo_id, IndexOptions(force=force, no_fetch=no_fetch)
+            )
             typer.echo(json.dumps(result, default=str, sort_keys=True))
         except AppError as exc:
             cli_error(exc)
         finally:
             await d.close()
+
     run_async(run())
 
 
 @index_app.command("sync")
-def index_sync(repo_id: int, force: bool = typer.Option(False, "--force"), yes: bool = typer.Option(False, "--yes"), no_fetch: bool = typer.Option(False, "--no-fetch"), allow_pinned: bool = typer.Option(False, "--allow-pinned")):
+def index_sync(
+    repo_id: int,
+    force: bool = typer.Option(False, "--force"),
+    yes: bool = typer.Option(False, "--yes"),
+    no_fetch: bool = typer.Option(False, "--no-fetch"),
+    allow_pinned: bool = typer.Option(False, "--allow-pinned"),
+):
     async def run():
-        s = load_settings(); d = Database(s); await d.open()
+        s = load_settings()
+        d = Database(s)
+        await d.open()
         try:
             service = make_indexer(s, d)
             if not yes:
@@ -736,12 +794,22 @@ def index_sync(repo_id: int, force: bool = typer.Option(False, "--force"), yes: 
                 typer.echo(json.dumps(plan, default=str, sort_keys=True))
                 if not typer.confirm("Proceed with sync?"):
                     raise typer.Abort()
-            result = await service.sync_repo(repo_id, IndexOptions(force=force, no_fetch=no_fetch, allow_pinned=allow_pinned))
-            typer.echo(json.dumps(result, default=str, sort_keys=True))
+            queued = await RepoService(d, s).enqueue_sync(
+                repo_id, "manual", force=force, override_pin=allow_pinned
+            )
+            if not queued.created:
+                typer.echo(json.dumps(queued.__dict__, sort_keys=True))
+                return
+            manager = repo_manager(s, d)
+            await Worker(manager, s).run_once(
+                IndexOptions(force=force, no_fetch=no_fetch, allow_pinned=allow_pinned)
+            )
+            typer.echo(json.dumps({"job_id": queued.job_id, "status": "processed"}, sort_keys=True))
         except AppError as exc:
             cli_error(exc)
         finally:
             await d.close()
+
     run_async(run())
 
 
@@ -817,6 +885,241 @@ def index_reset(repo_id: int, confirm: bool = typer.Option(False, "--confirm")):
             typer.echo("Index reset")
         except AppError as exc:
             cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@jobs_app.command("list")
+def jobs_list(
+    repo_id: int | None = typer.Option(None, "--repo"),
+    status: str | None = typer.Option(None, "--status"),
+    limit: int = typer.Option(20, "--limit"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            from dataclasses import asdict
+
+            values = [
+                asdict(job)
+                for job in await JobRepository(d, s).list(
+                    repo_id=repo_id, status=status, limit=limit
+                )
+            ]
+            typer.echo(
+                json.dumps(values, default=str, sort_keys=True)
+                if json_output
+                else "\n".join(
+                    f"{v['id']}\t{v['repo_id']}\t{v['type']}\t{v['status']}\t{v['trigger']}\tattempts={v['attempts']}"
+                    for v in values
+                )
+            )
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@jobs_app.command("show")
+def jobs_show(job_id: int):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            from dataclasses import asdict
+
+            typer.echo(
+                json.dumps(
+                    asdict(await JobRepository(d, s).get(job_id)), default=str, sort_keys=True
+                )
+            )
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@jobs_app.command("enqueue")
+def jobs_enqueue(
+    repo_id: int,
+    force: bool = typer.Option(False, "--force"),
+    override_pin: bool = typer.Option(False, "--override-pin"),
+):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            typer.echo(
+                json.dumps(
+                    (
+                        await RepoService(d, s).enqueue_sync(
+                            repo_id, "manual", force=force, override_pin=override_pin
+                        )
+                    ).__dict__,
+                    sort_keys=True,
+                )
+            )
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@jobs_app.command("cancel")
+def jobs_cancel(job_id: int):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            await JobRepository(d, s).cancel(job_id)
+            typer.echo("cancelled")
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@jobs_app.command("retry")
+def jobs_retry(job_id: int):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            typer.echo(
+                json.dumps((await JobRepository(d, s).retry(job_id)).__dict__, sort_keys=True)
+            )
+        except AppError as exc:
+            cli_error(exc)
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@jobs_app.command("reap")
+def jobs_reap():
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            typer.echo(str(await JobRepository(d, s).reap_stale(s.job_heartbeat_timeout_seconds)))
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@jobs_app.command("prune")
+def jobs_prune(days: int | None = typer.Option(None, "--days")):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            typer.echo(str(await JobRepository(d, s).prune(days or s.job_retention_days)))
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@worker_app.command("run")
+def worker_run(once: bool = typer.Option(False, "--once")):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            worker = Worker(RepoManager(d, s, load_pipeline()), s)
+            if once:
+                typer.echo(str(await worker.run_once()))
+            else:
+                await worker.start()
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@scheduler_app.command("tick")
+def scheduler_tick(dry_run: bool = typer.Option(False, "--dry-run")):
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            typer.echo(
+                json.dumps(
+                    await Scheduler(RepoManager(d, s, load_pipeline()), s).tick(dry_run=dry_run),
+                    default=str,
+                    sort_keys=True,
+                )
+            )
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@scheduler_app.command("status")
+def scheduler_status():
+    """Show next-check estimates and recent scheduler budget usage."""
+
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            manager = RepoManager(d, s, load_pipeline())
+            repos = await manager.store.list_repos()
+            async with d.connection() as conn:
+                cur = await conn.execute(
+                    f"SELECT count(*),coalesce(sum((result->>'embed_tokens')::bigint),0) "
+                    f"FROM {s.db_schema}.jobs "
+                    "WHERE status='done' AND finished_at >= now() - interval '1 day' "
+                    "AND type IN ('sync','full_reindex')"
+                )
+                runs, tokens = await cur.fetchone()
+            rows = [
+                {
+                    "repo_id": repo.id,
+                    "status": repo.status,
+                    "pinned": repo.pinned,
+                    "last_checked_at": repo.last_checked_at,
+                    "next_check": "manual-only" if repo.pinned else "scheduler-tick",
+                }
+                for repo in repos
+            ]
+            typer.echo(
+                json.dumps(
+                    {
+                        "budget": {
+                            "runs_24h": runs,
+                            "tokens_24h": tokens,
+                            "token_limit": s.auto_sync_daily_token_budget,
+                        },
+                        "repos": rows,
+                    },
+                    default=str,
+                    sort_keys=True,
+                )
+            )
         finally:
             await d.close()
 

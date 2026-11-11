@@ -105,6 +105,8 @@ class Repo(ValueModel):
     created_at: object | None = None
     updated_at: object | None = None
     pinned: bool = False
+    remote_sha: str | None = None
+    remote_checked_at: object | None = None
 
 
 class RepoRegistration(ValueModel):
@@ -255,7 +257,7 @@ class Citation(ValueModel):
 
 
 class GenerationEvent(ValueModel):
-    kind: Literal["token", "citations", "done", "error"]
+    kind: Literal["token", "citations", "done", "error", "status"]
     text: str | None = None
     citations: list[Citation] | None = None
     stats: dict | None = None

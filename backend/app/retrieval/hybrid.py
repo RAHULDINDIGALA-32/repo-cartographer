@@ -8,6 +8,7 @@ from psycopg import Error as PsycopgError
 
 from app.core.errors import DatabaseError
 from app.models import QueryAnalysis, RetrievalHit
+from app.retrieval.bm25 import BM25Retriever
 from app.retrieval.dense import DenseRetriever
 from app.retrieval.sparse import SparseRetriever, SymbolRetriever
 
@@ -74,6 +75,7 @@ class HybridRetriever:
         embedder=None,
         dense=None,
         sparse=None,
+        bm25=None,
         symbol=None,
         fuser=None,
         **_: object,
@@ -84,6 +86,7 @@ class HybridRetriever:
             db=db, settings=settings, config=config, embedder=embedder
         )
         self.sparse = sparse or SparseRetriever(db=db, settings=settings)
+        self.bm25 = bm25 or BM25Retriever(db=db, settings=settings, config=config)
         self.symbol = symbol or SymbolRetriever(db=db, settings=settings)
         self.fuser = fuser or WeightedRRF(config=config)
         self.last_trace: dict = {}
@@ -136,6 +139,13 @@ class HybridRetriever:
                     self.sparse.retrieve(repo_id, analysis, self.config.top_k_sparse, **kwargs),
                 )
             )
+        if "bm25" in sources:
+            tasks["bm25"] = asyncio.create_task(
+                timed(
+                    "bm25",
+                    self.bm25.retrieve(repo_id, analysis, self.config.top_k_sparse, **kwargs),
+                )
+            )
         if "symbol" in sources:
             tasks["symbol"] = asyncio.create_task(
                 timed(
@@ -162,7 +172,7 @@ class HybridRetriever:
                 lists.append(values)
                 labels.append(f"dense_sub_{index}")
                 weights.append(self.config.fusion_weights.get("dense_sub", 1.0))
-        for name in ("sparse", "symbol"):
+        for name in ("sparse", "bm25", "symbol"):
             if name in results:
                 lists.append(results[name])
                 labels.append(name)

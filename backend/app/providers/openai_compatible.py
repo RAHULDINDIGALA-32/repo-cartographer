@@ -133,8 +133,16 @@ class OpenAICompatibleGenerator:
         }
         if self.spec.temperature is not None:
             kwargs["temperature"] = self.spec.temperature
+        if self.spec.reasoning_effort is not None and self.spec.provider in {
+            "groq",
+            "openrouter",
+            "custom",
+        }:
+            kwargs["reasoning_effort"] = self.spec.reasoning_effort
         started = time.perf_counter()
         first_token = None
+        first_progress = None
+        first_visible = None
         visible = _VisibleText()
         output_chars = 0
         usage = None
@@ -150,6 +158,8 @@ class OpenAICompatibleGenerator:
                 )
             ).value
             async for chunk in stream:
+                if first_progress is None:
+                    first_progress = time.perf_counter()
                 if getattr(chunk, "usage", None):
                     usage = chunk.usage
                 choices = getattr(chunk, "choices", None) or []
@@ -159,6 +169,8 @@ class OpenAICompatibleGenerator:
                 stop_reason = getattr(choice, "finish_reason", None) or stop_reason
                 delta = getattr(choice, "delta", None)
                 text = getattr(delta, "content", None) or ""
+                if "<think>" in text:
+                    yield GenerationEvent(kind="status", text="thinking")
                 # Providers may put reasoning and visible content on the same
                 # delta. Ignore only the reasoning fields; never discard the
                 # visible content from that delta.
@@ -166,6 +178,8 @@ class OpenAICompatibleGenerator:
                 if text:
                     if first_token is None:
                         first_token = time.perf_counter()
+                    if first_visible is None:
+                        first_visible = first_token
                     output_chars += len(text)
                     yield GenerationEvent(kind="token", text=text)
             trailing = visible.finish()
@@ -184,6 +198,12 @@ class OpenAICompatibleGenerator:
                     "usage_source": "api" if usage else "estimated",
                     "first_token_ms": round(
                         ((first_token or time.perf_counter()) - started) * 1000
+                    ),
+                    "first_progress_ms": round(
+                        ((first_progress or time.perf_counter()) - started) * 1000
+                    ),
+                    "first_visible_token_ms": round(
+                        ((first_visible or time.perf_counter()) - started) * 1000
                     ),
                     "total_ms": round((time.perf_counter() - started) * 1000),
                     "stop_reason": stop_reason,

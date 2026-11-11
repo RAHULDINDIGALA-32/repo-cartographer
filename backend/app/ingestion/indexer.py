@@ -153,7 +153,7 @@ class Indexer:
         selected = report.model_copy(update={"entries": [e for e in report.entries if e.path in paths]})
         return await self._prepare(repo_id, selected, chunker_name)
 
-    async def sync_repo(self, repo_id: int, options: IndexOptions | None = None) -> dict:
+    async def sync_repo(self, repo_id: int, options: IndexOptions | None = None, *, job_id: int | None = None) -> dict:
         options = options or IndexOptions()
         repo = await self.manager.store.get_repo(repo_id)
         if repo.pinned and not options.allow_pinned:
@@ -165,7 +165,11 @@ class Indexer:
                 drift = any(v["chunker_drift"] or v["enricher_drift"] or v["embedder_drift"] or v["chunk_count"] == 0 for v in summaries.values())
                 if not drift:
                     return {"run_id": None, "status": "up_to_date", "from_sha": repo.indexed_sha, "to_sha": repo.indexed_sha, "duration_ms": 0}
-        old_status, old_sha = await self.writer.guard_repo(repo_id, self.settings.index_stale_after_minutes)
+        if job_id is None:
+            old_status, old_sha = await self.writer.guard_repo(repo_id, self.settings.index_stale_after_minutes)
+        else:
+            old_status, old_sha = repo.status, repo.indexed_sha
+            await self.writer.mark_indexing(repo_id)
         run_id = None
         counters = Counter()
         stats: dict = {}
@@ -195,7 +199,7 @@ class Indexer:
             current_paths = {e.path for e in report.entries}
             processed_paths = {e.path for e, _ in prepared}
             projected = sum(existing_counts.get(path, 0) for path in current_paths - processed_paths) + sum(len(values) for _, values in prepared)
-            run_id = await self.writer.start_run(repo_id, old_sha, report.head_sha, self.config.snapshot())
+            run_id = await self.writer.start_run(repo_id, old_sha, report.head_sha, self.config.snapshot(), job_id=job_id)
             stats.update(reprocess_reasons=changes.reason_counts, renamed_files=len(changes.renamed_hint), versions={"chunker": self._chunker(options.chunker).version, "enricher": self.enricher.version, "embedder": self.embedder.version}, timings_ms={"chunk": chunk_ms})
             if projected > self.settings.max_chunks_per_repo:
                 raise RepoTooLargeError(

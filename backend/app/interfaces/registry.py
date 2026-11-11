@@ -52,6 +52,7 @@ def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -
     from app.providers.voyage import VoyageEmbedder
     from app.retrieval.analyzers import LLMAnalyzer, RuleAnalyzer
     from app.retrieval.assembly import DefaultContextAssembler
+    from app.retrieval.bm25 import BM25Retriever
     from app.retrieval.dense import DenseRetriever
     from app.retrieval.hybrid import HybridRetriever, WeightedRRF
     from app.retrieval.rerank import VoyageReranker
@@ -67,6 +68,7 @@ def build_pipeline(config: PipelineConfig, deps: dict[str, Any] | None = None) -
         register("retriever", "dense", DenseRetriever)
     register("retriever", "sparse", SparseRetriever)
     register("retriever", "symbol", SymbolRetriever)
+    register("retriever", "bm25", BM25Retriever)
     register("retriever", "hybrid", HybridRetriever)
     if "default" not in REGISTRY["assembler"]:
         register("assembler", "default", DefaultContextAssembler)

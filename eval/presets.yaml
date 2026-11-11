@@ -10,6 +10,25 @@ symbol:
   retriever: symbol
   analysis: rule
   reranker: none
+bm25:
+  retriever: bm25
+  analysis: rule
+  reranker: none
+dense_bm25:
+  retriever: hybrid
+  hybrid_sources: [dense, bm25]
+  analysis: rule
+  reranker: none
+dense_bm25_symbol_rule:
+  retriever: hybrid
+  hybrid_sources: [dense, bm25, symbol]
+  analysis: rule
+  reranker: none
+dense_symbol_rule:
+  retriever: hybrid
+  hybrid_sources: [dense, symbol]
+  analysis: rule
+  reranker: none
 hybrid2:
   retriever: hybrid
   hybrid_sources: [dense, sparse]
