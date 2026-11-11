@@ -25,7 +25,13 @@ class IndexWriter:
         self.embedding_dim = embedding_dim
 
     async def start_run(
-        self, repo_id: int, from_sha: str | None, to_sha: str, config_snapshot: dict, *, job_id: int | None = None
+        self,
+        repo_id: int,
+        from_sha: str | None,
+        to_sha: str,
+        config_snapshot: dict,
+        *,
+        job_id: int | None = None,
     ) -> int:
         async with self.db.transaction() as conn:
             cur = await conn.execute(
@@ -145,9 +151,20 @@ class IndexWriter:
                 f"SELECT id,path,file_hash,language,size_bytes,last_seen_sha FROM {self.schema}.files WHERE repo_id=%s ORDER BY path",
                 (repo_id,),
             )
-            return [dict(zip(("id", "path", "file_hash", "language", "size_bytes", "last_seen_sha"), row, strict=True)) for row in await cur.fetchall()]
+            return [
+                dict(
+                    zip(
+                        ("id", "path", "file_hash", "language", "size_bytes", "last_seen_sha"),
+                        row,
+                        strict=True,
+                    )
+                )
+                for row in await cur.fetchall()
+            ]
 
-    async def load_chunk_summaries(self, repo_id: int, *, chunker_version: str, enricher_version: str, embedder_version: str) -> dict[str, dict]:
+    async def load_chunk_summaries(
+        self, repo_id: int, *, chunker_version: str, enricher_version: str, embedder_version: str
+    ) -> dict[str, dict]:
         async with self.db.connection() as conn:
             cur = await conn.execute(
                 f"""SELECT f.path, count(c.id),
@@ -158,11 +175,22 @@ class IndexWriter:
                     WHERE f.repo_id=%s GROUP BY f.path ORDER BY f.path""",
                 (chunker_version, enricher_version, embedder_version, repo_id),
             )
-            return {row[0]: {"chunk_count": row[1], "chunker_drift": bool(row[2] or False), "enricher_drift": bool(row[3] or False), "embedder_drift": bool(row[4] or False)} for row in await cur.fetchall()}
+            return {
+                row[0]: {
+                    "chunk_count": row[1],
+                    "chunker_drift": bool(row[2] or False),
+                    "enricher_drift": bool(row[3] or False),
+                    "embedder_drift": bool(row[4] or False),
+                }
+                for row in await cur.fetchall()
+            }
 
     async def chunk_counts(self, repo_id: int) -> dict[str, int]:
         async with self.db.connection() as conn:
-            cur = await conn.execute(f"SELECT f.path,count(c.id) FROM {self.schema}.files f LEFT JOIN {self.schema}.chunks c ON c.file_id=f.id WHERE f.repo_id=%s GROUP BY f.path", (repo_id,))
+            cur = await conn.execute(
+                f"SELECT f.path,count(c.id) FROM {self.schema}.files f LEFT JOIN {self.schema}.chunks c ON c.file_id=f.id WHERE f.repo_id=%s GROUP BY f.path",
+                (repo_id,),
+            )
             return {row[0]: row[1] for row in await cur.fetchall()}
 
     async def update_last_seen_sha(self, repo_id: int, paths: Iterable[str], sha: str) -> int:
@@ -170,12 +198,17 @@ class IndexWriter:
         if not paths:
             return 0
         async with self.db.transaction() as conn:
-            cur = await conn.execute(f"UPDATE {self.schema}.files SET last_seen_sha=%s WHERE repo_id=%s AND path=ANY(%s)", (sha, repo_id, paths))
+            cur = await conn.execute(
+                f"UPDATE {self.schema}.files SET last_seen_sha=%s WHERE repo_id=%s AND path=ANY(%s)",
+                (sha, repo_id, paths),
+            )
             return cur.rowcount
 
     async def repo_pinned(self, repo_id: int) -> bool:
         async with self.db.connection() as conn:
-            cur = await conn.execute(f"SELECT pinned FROM {self.schema}.repos WHERE id=%s", (repo_id,))
+            cur = await conn.execute(
+                f"SELECT pinned FROM {self.schema}.repos WHERE id=%s", (repo_id,)
+            )
             row = await cur.fetchone()
             if row is None:
                 raise NotFoundError("Repository not found")
@@ -251,4 +284,7 @@ class IndexWriter:
 
     async def mark_indexing(self, repo_id: int) -> None:
         async with self.db.transaction() as conn:
-            await conn.execute(f"UPDATE {self.schema}.repos SET status='indexing',last_error=NULL,updated_at=now() WHERE id=%s", (repo_id,))
+            await conn.execute(
+                f"UPDATE {self.schema}.repos SET status='indexing',last_error=NULL,updated_at=now() WHERE id=%s",
+                (repo_id,),
+            )

@@ -78,6 +78,36 @@ class ConflictError(AppError):
     http_status = 409
 
 
+class UnauthorizedError(AppError):
+    code = "unauthorized"
+    http_status = 401
+
+
+class ForbiddenError(AppError):
+    code = "forbidden"
+    http_status = 403
+
+
+class RateLimitedError(AppError):
+    code = "rate_limited"
+    http_status = 429
+
+
+class BudgetExhaustedError(AppError):
+    code = "budget_exhausted"
+    http_status = 429
+
+
+class ServerBusyError(AppError):
+    code = "server_busy"
+    http_status = 503
+
+
+class RepoNotReadyError(AppError):
+    code = "repo_not_ready"
+    http_status = 409
+
+
 class ProviderError(AppError):
     code = "provider_error"
     http_status = 502
@@ -106,6 +136,12 @@ ERROR_HTTP_STATUS = {
         GenerationProviderError,
         NotFoundError,
         ConflictError,
+        UnauthorizedError,
+        ForbiddenError,
+        RateLimitedError,
+        BudgetExhaustedError,
+        ServerBusyError,
+        RepoNotReadyError,
     )
 }
 

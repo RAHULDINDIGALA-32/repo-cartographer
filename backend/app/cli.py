@@ -124,6 +124,7 @@ def eval_retrieval(
     split: str = typer.Option("tune", "--split"),  # noqa: B008
     preset: str = typer.Option("dense", "--preset"),  # noqa: B008
     output: Path | None = typer.Option(None, "--output"),  # noqa: B008
+    allow_degraded: bool = typer.Option(False, "--allow-degraded"),
 ):
     import yaml
 
@@ -208,10 +209,15 @@ def eval_retrieval(
                 "degraded_questions": sum(bool(row.get("degraded")) for row in rows),
             },
         }
+        degraded_count = result["summary"]["degraded_questions"]
+        result["valid"] = not result["errored"] and (
+            allow_degraded or degraded_count == 0
+        )
+        result["allow_degraded"] = allow_degraded
         typer.echo(json.dumps(result, default=str, sort_keys=True))
         if output:
             output.write_text(json.dumps(result, default=str, indent=2), encoding="utf-8")
-        if result["errored"]:
+        if not result["valid"]:
             raise typer.Exit(1)
 
     run_async(run())
@@ -740,9 +746,7 @@ def index_run(
             if not queued.created:
                 typer.echo(json.dumps(queued.__dict__, sort_keys=True))
                 return
-            await Worker(repo_manager(s, d), s).run_once(
-                IndexOptions(force=True, no_fetch=False)
-            )
+            await Worker(repo_manager(s, d), s).run_once(IndexOptions(force=True, no_fetch=False))
             typer.echo(json.dumps({"job_id": queued.job_id, "status": "processed"}, sort_keys=True))
         except AppError as exc:
             cli_error(exc)
@@ -1048,7 +1052,22 @@ def worker_run(once: bool = typer.Option(False, "--once")):
         try:
             worker = Worker(RepoManager(d, s, load_pipeline()), s)
             if once:
-                typer.echo(str(await worker.run_once()))
+                job = await worker.run_once()
+                if job is None:
+                    typer.echo(json.dumps({"status": "idle"}))
+                else:
+                    typer.echo(
+                        json.dumps(
+                            {
+                                "job_id": job.id,
+                                "job": __import__("dataclasses").asdict(
+                                    await JobRepository(d, s).get(job.id)
+                                ),
+                            },
+                            default=str,
+                            sort_keys=True,
+                        )
+                    )
             else:
                 await worker.start()
         finally:
@@ -1086,40 +1105,7 @@ def scheduler_status():
         d = Database(s)
         await d.open()
         try:
-            manager = RepoManager(d, s, load_pipeline())
-            repos = await manager.store.list_repos()
-            async with d.connection() as conn:
-                cur = await conn.execute(
-                    f"SELECT count(*),coalesce(sum((result->>'embed_tokens')::bigint),0) "
-                    f"FROM {s.db_schema}.jobs "
-                    "WHERE status='done' AND finished_at >= now() - interval '1 day' "
-                    "AND type IN ('sync','full_reindex')"
-                )
-                runs, tokens = await cur.fetchone()
-            rows = [
-                {
-                    "repo_id": repo.id,
-                    "status": repo.status,
-                    "pinned": repo.pinned,
-                    "last_checked_at": repo.last_checked_at,
-                    "next_check": "manual-only" if repo.pinned else "scheduler-tick",
-                }
-                for repo in repos
-            ]
-            typer.echo(
-                json.dumps(
-                    {
-                        "budget": {
-                            "runs_24h": runs,
-                            "tokens_24h": tokens,
-                            "token_limit": s.auto_sync_daily_token_budget,
-                        },
-                        "repos": rows,
-                    },
-                    default=str,
-                    sort_keys=True,
-                )
-            )
+            typer.echo(json.dumps(await Scheduler(RepoManager(d, s, load_pipeline()), s).status(), default=str, sort_keys=True))
         finally:
             await d.close()
 

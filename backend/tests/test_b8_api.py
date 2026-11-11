@@ -1,0 +1,60 @@
+from pydantic import ValidationError
+
+from app.api.limiter import TokenBucketLimiter
+from app.api.models import AskRequest
+from app.config.settings import Settings
+from app.models import ChunkRecord, RetrievalHit
+
+
+def test_production_settings_require_admin_key_and_reject_wildcard():
+    try:
+        Settings(
+            database_url="postgresql://localhost/db",
+            env="prod",
+            cors_origins=["*"],
+        )
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("production settings must reject missing admin keys and wildcard CORS")
+
+
+def test_api_models_reject_unknown_fields():
+    try:
+        AskRequest(question="hello", unexpected=True)
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("API request models must be strict")
+
+
+def test_bm25_is_a_valid_retrieval_source():
+    chunk = ChunkRecord(
+        id=1,
+        file_id=1,
+        repo_id=1,
+        path="a.py",
+        symbol_type="function",
+        start_line=1,
+        end_line=2,
+        text="return 1",
+        token_count=2,
+        chunker_version="ast:1",
+    )
+    assert RetrievalHit(chunk=chunk, score=1.0, source="bm25", rank=1).source == "bm25"
+
+
+def test_token_bucket_burst_and_refill():
+    now = [0.0]
+    limiter = TokenBucketLimiter(rate_per_minute=60, burst=2, clock=lambda: now[0])
+
+    async def run():
+        assert await limiter.allow("a")
+        assert await limiter.allow("a")
+        assert not await limiter.allow("a")
+        now[0] = 1.0
+        assert await limiter.allow("a")
+
+    import asyncio
+
+    asyncio.run(run())

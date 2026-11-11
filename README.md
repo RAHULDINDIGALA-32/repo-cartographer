@@ -132,3 +132,19 @@ uv run cartographer jobs prune
 
 The current worker is an in-process polling worker and the scheduler is polling-based; this phase does not provide webhooks, distributed workers, commit-distance reporting, or mid-run cancellation.
 
+## Running the API
+
+The HTTP surface is versioned under `/v1`; see [`docs/api.md`](docs/api.md) for
+the request, SSE, error, authentication, and limit contract. Start locally only
+after applying migrations:
+
+```text
+uv run cartographer db migrate
+uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+`/health` is liveness-only; `/ready` checks PostgreSQL, migrations, vector
+dimension, and worker configuration. Keep `API_RUN_WORKER=false` until the B7
+Docker-backed verification gate is complete. Deployment instructions and
+ephemeral-disk/free-tier caveats are in [`docs/deploy.md`](docs/deploy.md).
+

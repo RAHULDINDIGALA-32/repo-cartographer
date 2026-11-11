@@ -131,29 +131,74 @@ class Indexer:
         options = options or IndexOptions()
         check = await self.manager.check_remote(repo_id, persist=False)
         existing = await self.writer.load_files(repo_id)
-        summaries = await self.writer.load_chunk_summaries(repo_id, chunker_version=self._chunker(options.chunker).version, enricher_version=self.enricher.version, embedder_version=self.embedder.version)
+        summaries = await self.writer.load_chunk_summaries(
+            repo_id,
+            chunker_version=self._chunker(options.chunker).version,
+            enricher_version=self.enricher.version,
+            embedder_version=self.embedder.version,
+        )
         if not options.force and not check.is_stale:
-            return {"status": "up_to_date", "remote_sha": check.remote_sha, "change_set": {"added": 0, "modified": 0, "deleted": 0, "unchanged": len(existing), "reprocess": 0}}
+            return {
+                "status": "up_to_date",
+                "remote_sha": check.remote_sha,
+                "change_set": {
+                    "added": 0,
+                    "modified": 0,
+                    "deleted": 0,
+                    "unchanged": len(existing),
+                    "reprocess": 0,
+                },
+            }
         if not options.no_fetch:
             await self.manager.fetch(repo_id)
         report = await self.manager.scan(repo_id)
         changes = compute_change_set(report.entries, existing, summaries)
         if options.force:
-            changes = ChangeSet(changes.added, changes.modified, changes.deleted, changes.unchanged, tuple(ReprocessItem(e.path, ("forced",)) for e in report.entries), changes.renamed_hint)
+            changes = ChangeSet(
+                changes.added,
+                changes.modified,
+                changes.deleted,
+                changes.unchanged,
+                tuple(ReprocessItem(e.path, ("forced",)) for e in report.entries),
+                changes.renamed_hint,
+            )
         counts = await self.writer.chunk_counts(repo_id)
-        prepared, fallback, symbols, below_min, chunk_ms = await self._prepare_selected(repo_id, report, changes, options.chunker)
-        projected = sum(counts.get(path, 0) for path in {e.path for e in report.entries} - {e.path for e, _ in prepared}) + sum(len(v) for _, v in prepared)
+        prepared, fallback, symbols, below_min, chunk_ms = await self._prepare_selected(
+            repo_id, report, changes, options.chunker
+        )
+        projected = sum(
+            counts.get(path, 0)
+            for path in {e.path for e in report.entries} - {e.path for e, _ in prepared}
+        ) + sum(len(v) for _, v in prepared)
         hashes = [c.content_hash for _, values in prepared for c in values if c.content_hash]
         reusable = await self.writer.lookup_embeddings(hashes, self.embedder.version)
         missing = [c for _, values in prepared for c in values if c.content_hash not in reusable]
-        return {"status": "planned", "from_sha": check.indexed_sha, "to_sha": report.head_sha, "change_set": changes.counts, "reprocess_reasons": changes.reason_counts, "renamed_hints": list(changes.renamed_hint), "projected_chunks": projected, "cap": self.settings.max_chunks_per_repo, "cap_warning": projected > self.settings.max_chunks_per_repo, "to_embed": len(missing), "embed_tokens": sum(c.token_count for c in missing), "fallbacks": dict(fallback), "chunk_time_ms": chunk_ms}
+        return {
+            "status": "planned",
+            "from_sha": check.indexed_sha,
+            "to_sha": report.head_sha,
+            "change_set": changes.counts,
+            "reprocess_reasons": changes.reason_counts,
+            "renamed_hints": list(changes.renamed_hint),
+            "projected_chunks": projected,
+            "cap": self.settings.max_chunks_per_repo,
+            "cap_warning": projected > self.settings.max_chunks_per_repo,
+            "to_embed": len(missing),
+            "embed_tokens": sum(c.token_count for c in missing),
+            "fallbacks": dict(fallback),
+            "chunk_time_ms": chunk_ms,
+        }
 
     async def _prepare_selected(self, repo_id, report, changes, chunker_name):
         paths = {item.path for item in changes.reprocess}
-        selected = report.model_copy(update={"entries": [e for e in report.entries if e.path in paths]})
+        selected = report.model_copy(
+            update={"entries": [e for e in report.entries if e.path in paths]}
+        )
         return await self._prepare(repo_id, selected, chunker_name)
 
-    async def sync_repo(self, repo_id: int, options: IndexOptions | None = None, *, job_id: int | None = None) -> dict:
+    async def sync_repo(
+        self, repo_id: int, options: IndexOptions | None = None, *, job_id: int | None = None
+    ) -> dict:
         options = options or IndexOptions()
         repo = await self.manager.store.get_repo(repo_id)
         if repo.pinned and not options.allow_pinned:
@@ -161,12 +206,31 @@ class Indexer:
         if not options.force:
             check = await self.manager.check_remote(repo_id, persist=False)
             if not check.is_stale:
-                summaries = await self.writer.load_chunk_summaries(repo_id, chunker_version=self._chunker(options.chunker).version, enricher_version=self.enricher.version, embedder_version=self.embedder.version)
-                drift = any(v["chunker_drift"] or v["enricher_drift"] or v["embedder_drift"] or v["chunk_count"] == 0 for v in summaries.values())
+                summaries = await self.writer.load_chunk_summaries(
+                    repo_id,
+                    chunker_version=self._chunker(options.chunker).version,
+                    enricher_version=self.enricher.version,
+                    embedder_version=self.embedder.version,
+                )
+                drift = any(
+                    v["chunker_drift"]
+                    or v["enricher_drift"]
+                    or v["embedder_drift"]
+                    or v["chunk_count"] == 0
+                    for v in summaries.values()
+                )
                 if not drift:
-                    return {"run_id": None, "status": "up_to_date", "from_sha": repo.indexed_sha, "to_sha": repo.indexed_sha, "duration_ms": 0}
+                    return {
+                        "run_id": None,
+                        "status": "up_to_date",
+                        "from_sha": repo.indexed_sha,
+                        "to_sha": repo.indexed_sha,
+                        "duration_ms": 0,
+                    }
         if job_id is None:
-            old_status, old_sha = await self.writer.guard_repo(repo_id, self.settings.index_stale_after_minutes)
+            old_status, old_sha = await self.writer.guard_repo(
+                repo_id, self.settings.index_stale_after_minutes
+            )
         else:
             old_status, old_sha = repo.status, repo.indexed_sha
             await self.writer.mark_indexing(repo_id)
@@ -180,11 +244,25 @@ class Indexer:
                 await self.manager.fetch(repo_id)
             report = await self.manager.scan(repo_id)
             existing_rows = await self.writer.load_files(repo_id)
-            summaries = await self.writer.load_chunk_summaries(repo_id, chunker_version=self._chunker(options.chunker).version, enricher_version=self.enricher.version, embedder_version=self.embedder.version)
+            summaries = await self.writer.load_chunk_summaries(
+                repo_id,
+                chunker_version=self._chunker(options.chunker).version,
+                enricher_version=self.enricher.version,
+                embedder_version=self.embedder.version,
+            )
             changes = compute_change_set(report.entries, existing_rows, summaries)
             if options.force:
-                changes = ChangeSet(changes.added, changes.modified, changes.deleted, changes.unchanged, tuple(ReprocessItem(e.path, ("forced",)) for e in report.entries), changes.renamed_hint)
-            prepared, fallback, symbols, below_min, chunk_ms = await self._prepare_selected(repo_id, report, changes, options.chunker)
+                changes = ChangeSet(
+                    changes.added,
+                    changes.modified,
+                    changes.deleted,
+                    changes.unchanged,
+                    tuple(ReprocessItem(e.path, ("forced",)) for e in report.entries),
+                    changes.renamed_hint,
+                )
+            prepared, fallback, symbols, below_min, chunk_ms = await self._prepare_selected(
+                repo_id, report, changes, options.chunker
+            )
             stats.update(
                 skip_reasons={
                     item.reason: {"count": item.count, "bytes": item.total_bytes}
@@ -198,9 +276,22 @@ class Indexer:
             existing_counts = await self.writer.chunk_counts(repo_id)
             current_paths = {e.path for e in report.entries}
             processed_paths = {e.path for e, _ in prepared}
-            projected = sum(existing_counts.get(path, 0) for path in current_paths - processed_paths) + sum(len(values) for _, values in prepared)
-            run_id = await self.writer.start_run(repo_id, old_sha, report.head_sha, self.config.snapshot(), job_id=job_id)
-            stats.update(reprocess_reasons=changes.reason_counts, renamed_files=len(changes.renamed_hint), versions={"chunker": self._chunker(options.chunker).version, "enricher": self.enricher.version, "embedder": self.embedder.version}, timings_ms={"chunk": chunk_ms})
+            projected = sum(
+                existing_counts.get(path, 0) for path in current_paths - processed_paths
+            ) + sum(len(values) for _, values in prepared)
+            run_id = await self.writer.start_run(
+                repo_id, old_sha, report.head_sha, self.config.snapshot(), job_id=job_id
+            )
+            stats.update(
+                reprocess_reasons=changes.reason_counts,
+                renamed_files=len(changes.renamed_hint),
+                versions={
+                    "chunker": self._chunker(options.chunker).version,
+                    "enricher": self.enricher.version,
+                    "embedder": self.embedder.version,
+                },
+                timings_ms={"chunk": chunk_ms},
+            )
             if projected > self.settings.max_chunks_per_repo:
                 raise RepoTooLargeError(
                     f"Projected index contains {projected} chunks, exceeding the {self.settings.max_chunks_per_repo} chunk limit"
@@ -268,11 +359,17 @@ class Indexer:
                 rate_limit_wait_ms=provider_stats["throttle_wait_ms"],
             )
             stats["timings_ms"]["write"] = round((time.perf_counter() - write_started) * 1000)
-            counters["chunks_deleted"] = sum(existing_counts.get(path, 0) for path in set(changes.deleted) | processed_paths)
+            counters["chunks_deleted"] = sum(
+                existing_counts.get(path, 0) for path in set(changes.deleted) | processed_paths
+            )
             counters["files_deleted"] = await self.writer.delete_files(repo_id, changes.deleted)
             await self.writer.update_last_seen_sha(repo_id, changes.unchanged, report.head_sha)
-            stats["reuse_ratio"] = counters["chunks_reused"] / max(1, counters["chunks_reused"] + counters["chunks_embedded"])
-            stats["tokens_saved_estimate"] = sum(c.token_count for c in all_chunks if c.content_hash in reusable)
+            stats["reuse_ratio"] = counters["chunks_reused"] / max(
+                1, counters["chunks_reused"] + counters["chunks_embedded"]
+            )
+            stats["tokens_saved_estimate"] = sum(
+                c.token_count for c in all_chunks if c.content_hash in reusable
+            )
             await self.writer.finish_run(run_id, "succeeded", counters, stats)
             await self.writer.mark_ready(repo_id, report.head_sha)
             return {

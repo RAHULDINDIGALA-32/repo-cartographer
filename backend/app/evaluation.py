@@ -162,9 +162,7 @@ def paired_comparison(
 def evaluation_summary(rows: list[dict], *, stage: str = "metrics") -> dict[str, Any]:
     key = "ranked_metrics" if stage == "ranked" else "metrics"
     answerable = [
-        row[key]
-        for row in rows
-        if "error" not in row and row.get(key, {}).get("answerable")
+        row[key] for row in rows if "error" not in row and row.get(key, {}).get("answerable")
     ]
     summary: dict[str, Any] = {"stage": stage, "answerable": len(answerable)}
     for metric in ("hit@5", "mrr", "context_recall"):

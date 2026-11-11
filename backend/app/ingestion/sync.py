@@ -1,4 +1,5 @@
 """Pure change-set calculation used by incremental indexing and previews."""
+
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
@@ -24,7 +25,13 @@ class ChangeSet:
 
     @property
     def counts(self) -> dict[str, int]:
-        return {"added": len(self.added), "modified": len(self.modified), "deleted": len(self.deleted), "unchanged": len(self.unchanged), "reprocess": len(self.reprocess)}
+        return {
+            "added": len(self.added),
+            "modified": len(self.modified),
+            "deleted": len(self.deleted),
+            "unchanged": len(self.unchanged),
+            "reprocess": len(self.reprocess),
+        }
 
     @property
     def reason_counts(self) -> dict[str, int]:
@@ -68,7 +75,12 @@ def _get(value, key, default=None):
     return getattr(value, key, default)
 
 
-def compute_change_set(inventory: Iterable, existing: Iterable, summaries: Mapping | None = None, active_versions: Mapping | None = None) -> ChangeSet:
+def compute_change_set(
+    inventory: Iterable,
+    existing: Iterable,
+    summaries: Mapping | None = None,
+    active_versions: Mapping | None = None,
+) -> ChangeSet:
     """Compare scan rows with indexed rows without I/O.
 
     The function accepts pydantic models, dataclasses, or mappings, which keeps
@@ -116,4 +128,11 @@ def compute_change_set(inventory: Iterable, existing: Iterable, summaries: Mappi
         digest = str(_get(inv[path], "file_hash"))
         for old_path in by_hash.get(digest, []):
             hints.append((old_path, path))
-    return ChangeSet(tuple(added), tuple(modified), tuple(deleted), tuple(sorted(set(unchanged))), tuple(sorted(reprocess, key=lambda x: x.path)), tuple(sorted(hints)))
+    return ChangeSet(
+        tuple(added),
+        tuple(modified),
+        tuple(deleted),
+        tuple(sorted(set(unchanged))),
+        tuple(sorted(reprocess, key=lambda x: x.path)),
+        tuple(sorted(hints)),
+    )

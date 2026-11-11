@@ -232,7 +232,7 @@ class QueryAnalysis(ValueModel):
 class RetrievalHit(ValueModel):
     chunk: ChunkRecord
     score: float
-    source: Literal["dense", "sparse", "symbol", "fused", "reranked"]
+    source: Literal["dense", "sparse", "bm25", "symbol", "fused", "reranked"]
     rank: int = Field(ge=1)
 
 

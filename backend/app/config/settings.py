@@ -45,6 +45,22 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: Literal["console", "json"] | None = None
     cors_origins: list[str] = ["http://localhost:5173"]
+    api_admin_keys: list[SecretStr] = []
+    trusted_proxy_count: int = Field(0, ge=0)
+    default_preset: str = "dense"
+    max_request_body_bytes: int = Field(16_384, ge=1024)
+    max_concurrent_asks: int = Field(4, ge=1)
+    ask_queue_wait_ms: int = Field(0, ge=0)
+    ask_timeout_seconds: int = Field(90, gt=0)
+    sse_heartbeat_seconds: float = Field(15, gt=0)
+    rate_limit_ask_per_minute: int = Field(6, ge=1)
+    rate_limit_ask_burst: int = Field(3, ge=1)
+    rate_limit_write_per_minute: int = Field(10, ge=1)
+    ask_daily_token_budget: int = Field(200_000, ge=0)
+    ask_daily_per_client: int = Field(50, ge=1)
+    api_run_worker: bool = False
+    pool_warmup: bool = True
+    docs_enabled: bool | None = None
     max_repos: int = Field(5, ge=1)
     max_repo_files: int = Field(5000, ge=1)
     max_file_bytes: int = Field(500_000, ge=1)
@@ -101,6 +117,12 @@ class Settings(BaseSettings):
             raise ValueError("db_pool_min cannot exceed db_pool_max")
         if self.log_format is None:
             self.log_format = "json" if self.env == "prod" else "console"
+        if self.docs_enabled is None:
+            self.docs_enabled = self.env != "prod"
+        if self.env == "prod" and not self.api_admin_keys:
+            raise ValueError("api_admin_keys is required in prod")
+        if self.env == "prod" and "*" in self.cors_origins:
+            raise ValueError("wildcard CORS is not allowed in prod")
         return self
 
     @field_validator("db_schema")
@@ -124,4 +146,6 @@ class Settings(BaseSettings):
         ):
             if result.get(key):
                 result[key] = "********"
+        if result.get("api_admin_keys"):
+            result["api_admin_keys"] = ["********"] * len(result["api_admin_keys"])
         return result

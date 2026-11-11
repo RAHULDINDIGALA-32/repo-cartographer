@@ -45,9 +45,7 @@ class BM25Retriever:
         ttl = getattr(self.settings, "bm25_cache_ttl_seconds", 30)
         max_repositories = getattr(self.settings, "bm25_cache_repositories", 3)
         cache_hit = bool(
-            cached
-            and cached.fingerprint == tuple(fingerprint)
-            and now - cached.loaded_at < ttl
+            cached and cached.fingerprint == tuple(fingerprint) and now - cached.loaded_at < ttl
         )
         if cache_hit:
             self._last_cache_hit = True

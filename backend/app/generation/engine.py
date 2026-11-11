@@ -124,9 +124,7 @@ class QueryEngine:
         if result.is_stale:
             queued = await RepoService(self.db, self.settings).enqueue_sync(repo_id, "lazy_check")
             queued_status = (
-                "queued"
-                if queued.created or queued.reason == "coalesced"
-                else "refused_budget"
+                "queued" if queued.created or queued.reason == "coalesced" else "refused_budget"
             )
         return result, queued_status
 
