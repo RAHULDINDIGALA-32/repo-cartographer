@@ -47,9 +47,18 @@ def _error_body(request: Request, code: str, message: str, status: int, *, detai
     return response
 
 
+def _pipeline_config_path() -> Path:
+    """Resolve config in both the source tree and the container image."""
+    candidates = (
+        Path(__file__).parents[1] / "config.yaml",
+        Path(__file__).parents[2] / "config.yaml",
+    )
+    return next((path for path in candidates if path.is_file()), candidates[0])
+
+
 def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None = None) -> FastAPI:
     runtime = settings or Settings()
-    config = pipeline or PipelineConfig.from_yaml(Path(__file__).parents[2] / "config.yaml")
+    config = pipeline or PipelineConfig.from_yaml(_pipeline_config_path())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
