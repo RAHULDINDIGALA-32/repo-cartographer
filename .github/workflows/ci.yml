@@ -39,4 +39,4 @@ jobs:
           TEST_DATABASE_URL: postgresql://cartographer:cartographer@localhost:55432/cartographer_test
       - run: uv run cartographer eval validate --path ../eval/questions.yaml
       - run: docker build -t repo-cartographer:ci .
-        working-directory: ..
+        working-directory: ${{ github.workspace }}

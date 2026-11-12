@@ -18,6 +18,7 @@ COPY --from=builder /build/.venv /app/.venv
 COPY --from=builder /build/app /app/app
 COPY --from=builder /build/migrations /app/migrations
 COPY --from=builder /build/config.yaml /app/config.yaml
+COPY --from=builder /build/config /app/config
 COPY --from=builder /opt/tiktoken /opt/tiktoken
 RUN mkdir -p /app/data && chown -R app:app /app
 USER app
