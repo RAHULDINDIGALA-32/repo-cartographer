@@ -423,9 +423,11 @@ async def admin_stats(
         clause += " AND repo_id=%s"
         params.append(repo_id)
     async with request.app.state.db.connection() as conn:
+        # Keep this projection aligned with migrations 0002/0004. Query logs
+        # store the indexed SHA, but not an indexed_at column; repository
+        # indexing timestamps belong to repos/index_runs.
         cur = await conn.execute(
-            f"SELECT id,repo_id,indexed_sha,indexed_at,query,error,latencies_ms,"
-            f"tokens_in,tokens_out,citation_check,trace,created_at "
+            f"SELECT error,latencies_ms,tokens_in,tokens_out,citation_check,trace "
             f"FROM {schema}.query_logs WHERE {clause} ORDER BY id",
             params,
         )
@@ -450,14 +452,14 @@ async def admin_stats(
     citations = {"ok": 0, "uncited": 0, "invalid": 0, "normalized": 0}
     degraded: dict[str, int] = {}
     for row in logs:
-        error = row[5]
+        error = row[0]
         outcomes[error or "ok"] = outcomes.get(error or "ok", 0) + 1
-        tokens_in += row[7] or 0
-        tokens_out += row[8] or 0
-        for stage, value in (row[6] or {}).items():
+        tokens_in += row[2] or 0
+        tokens_out += row[3] or 0
+        for stage, value in (row[1] or {}).items():
             if isinstance(value, (int, float)):
                 stages.setdefault(stage, []).append(float(value))
-        check = row[9] or {}
+        check = row[4] or {}
         if check.get("uncited_answer"):
             citations["uncited"] += 1
         elif check.get("invalid"):
@@ -466,7 +468,7 @@ async def admin_stats(
             citations["ok"] += 1
         if check.get("variants_normalized"):
             citations["normalized"] += 1
-        for component in (row[10] or {}).get("degraded", []):
+        for component in (row[5] or {}).get("degraded", []):
             degraded[component] = degraded.get(component, 0) + 1
     total = len(logs)
     citations["compliance_rate"] = citations["ok"] / total if total else None

@@ -30,6 +30,9 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen
       - run: uv run ruff check app tests
+      - name: Create test database
+        run: >-
+          uv run python -c 'import psycopg; c=psycopg.connect("postgresql://cartographer:cartographer@localhost:55432/cartographer", autocommit=True); exists=c.execute("SELECT 1 FROM pg_database WHERE datname=$$cartographer_test$$").fetchone(); c.execute("CREATE DATABASE cartographer_test") if not exists else None; c.close()'
       - run: uv run pytest -q
         env:
           DATABASE_URL: postgresql://cartographer:cartographer@localhost:55432/cartographer
