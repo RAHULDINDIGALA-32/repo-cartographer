@@ -12,6 +12,7 @@ class StrictModel(BaseModel):
 class RepoCreateRequest(StrictModel):
     url: str = Field(min_length=1, max_length=500)
     enqueue: bool = True
+    public: bool = True
 
 
 class SyncRequest(StrictModel):
@@ -23,6 +24,7 @@ class AskOptions(StrictModel):
     k: int | None = Field(default=None, ge=1, le=100)
     path_prefix: str | None = Field(default=None, max_length=300)
     language: str | None = Field(default=None, max_length=50)
+    include_context: bool = False
 
 
 class AskRequest(StrictModel):

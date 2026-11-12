@@ -41,3 +41,19 @@ def require_admin(request: Request) -> str:
         if hmac.compare_digest(supplied, secret.get_secret_value()):
             return f"admin:{index}"
     raise ForbiddenError("Invalid admin API key")
+
+
+def is_admin(request: Request) -> bool:
+    try:
+        require_admin(request)
+    except (UnauthorizedError, ForbiddenError):
+        return False
+    return True
+
+
+def verify_hmac_signature(secret: str, body: bytes, signature: str) -> bool:
+    """Verify a GitHub sha256 webhook signature over the raw request body."""
+    if not secret or not signature.startswith("sha256="):
+        return False
+    expected = "sha256=" + hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)

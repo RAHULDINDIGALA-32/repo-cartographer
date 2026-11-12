@@ -130,7 +130,7 @@ uv run cartographer jobs reap
 uv run cartographer jobs prune
 ```
 
-The current worker is an in-process polling worker and the scheduler is polling-based; this phase does not provide webhooks, distributed workers, commit-distance reporting, or mid-run cancellation.
+The current worker is an in-process polling worker and the scheduler is polling-based. B9 adds an optional signed GitHub push webhook for queueing syncs; distributed workers, commit-distance reporting, and mid-run cancellation remain out of scope.
 
 ## Running the API
 
@@ -140,11 +140,21 @@ after applying migrations:
 
 ```text
 uv run cartographer db migrate
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+uv run cartographer-api
 ```
 
 `/health` is liveness-only; `/ready` checks PostgreSQL, migrations, vector
 dimension, and worker configuration. Keep `API_RUN_WORKER=false` until the B7
 Docker-backed verification gate is complete. Deployment instructions and
 ephemeral-disk/free-tier caveats are in [`docs/deploy.md`](docs/deploy.md).
+
+## Privacy and operations
+
+The service stores questions, generated answers, retrieval IDs, stage timings,
+token usage, citation checks, and hashed client identities for rate limits and
+feedback. Query logs are retained for 90 days by default and can be purged with
+`uv run cartographer queries prune`. Questions and source chunks may be sent to
+the configured embedding and generation providers; use public repositories only
+under the current project scope. See [`docs/operations.md`](docs/operations.md)
+and [`docs/security.md`](docs/security.md).
 

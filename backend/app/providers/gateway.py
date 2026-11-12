@@ -13,6 +13,7 @@ import structlog
 
 from app.config.settings import Settings
 from app.core.errors import ProviderError
+from app.observability import metrics
 from app.providers.errors import safe_message
 
 log = structlog.get_logger(__name__)
@@ -201,6 +202,18 @@ class ProviderGateway:
                         latency_ms=latency,
                         status="success",
                     )
+                    metrics.inc(
+                        "provider_calls_total",
+                        provider=provider,
+                        operation=operation_name,
+                        outcome="ok",
+                    )
+                    metrics.observe(
+                        "provider_call_duration_seconds",
+                        latency / 1000,
+                        provider=provider,
+                        operation=operation_name,
+                    )
                     return GatewayResult(value, accounting)
                 except Exception as exc:
                     status, retry_after, retryable = self._failure(exc)
@@ -213,6 +226,12 @@ class ProviderGateway:
                             status=status or "transport",
                             error_type=type(exc).__name__,
                             error_message=safe_message(str(exc)),
+                        )
+                        metrics.inc(
+                            "provider_calls_total",
+                            provider=provider,
+                            operation=operation_name,
+                            outcome=str(status or "error"),
                         )
                         raise ProviderError(
                             f"{provider} {operation_name} failed after {attempt + 1} attempt(s)",
@@ -231,6 +250,11 @@ class ProviderGateway:
                         * self._random()
                     )
                     retries += 1
+                    metrics.inc(
+                        "provider_retries_total",
+                        provider=provider,
+                        operation=operation_name,
+                    )
                     log.warning(
                         "provider_retry",
                         provider=provider,

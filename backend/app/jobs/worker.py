@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 
 import structlog
@@ -8,6 +9,7 @@ import structlog
 from app.core.errors import ProviderError, RepoFetchError
 from app.ingestion.indexer import IndexOptions
 from app.jobs.repository import Job, JobRepository
+from app.observability import metrics
 
 log = structlog.get_logger(__name__)
 
@@ -29,6 +31,7 @@ class Worker:
         job = await self.jobs.claim_next(self.worker_id)
         if job is None:
             return None
+        started = time.perf_counter()
         heartbeat_stop = asyncio.Event()
 
         async def heartbeat():
@@ -58,6 +61,18 @@ class Worker:
                 job_id=job.id,
             )
             await self.jobs.complete(job.id, result)
+            metrics.inc("jobs_total", type=job.type, trigger=job.trigger, status="done")
+            metrics.observe(
+                "job_duration_seconds",
+                time.perf_counter() - started,
+                type=job.type,
+                trigger=job.trigger,
+                status="done",
+            )
+            metrics.inc("embed_tokens_total", result.get("embed_tokens", 0), kind="embedded")
+            # Reused chunks avoid provider work, but their token count is not
+            # equivalent to embedded tokens. Keep this metric truthful; the
+            # index run still records the reuse count separately.
         except asyncio.CancelledError:
             await self.jobs.release(job.id)
             raise
@@ -72,6 +87,14 @@ class Worker:
                 str(exc),
                 retryable=retryable,
                 retry_after=getattr(exc, "retry_after", None),
+            )
+            metrics.inc("jobs_total", type=job.type, trigger=job.trigger, status="failed")
+            metrics.observe(
+                "job_duration_seconds",
+                time.perf_counter() - started,
+                type=job.type,
+                trigger=job.trigger,
+                status="failed",
             )
         finally:
             heartbeat_stop.set()

@@ -323,9 +323,19 @@ class QueryEngine:
                 answer, blocks, owner, name, payload["indexed_sha"] or "unknown"
             )
             payload["citation_check"] = result.as_dict()
+            citation_blocks = {block.chunk_id: block.text for block in blocks}
+            enriched_citations = [
+                citation.model_copy(
+                    update={
+                        "snippet": citation_blocks.get(citation.chunk_id, "")[:2000],
+                        "snippet_truncated": len(citation_blocks.get(citation.chunk_id, "")) > 2000,
+                    }
+                )
+                for citation in result.citations
+            ]
             yield {
                 "kind": "citations",
-                "citations": [citation.model_dump(mode="json") for citation in result.citations],
+                "citations": [citation.model_dump(mode="json") for citation in enriched_citations],
                 "validation": result.as_dict(),
             }
             payload["latencies_ms"].update(

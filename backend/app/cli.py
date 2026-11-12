@@ -56,6 +56,8 @@ worker_app = typer.Typer()
 app.add_typer(worker_app, name="worker")
 scheduler_app = typer.Typer()
 app.add_typer(scheduler_app, name="scheduler")
+queries_app = typer.Typer()
+app.add_typer(queries_app, name="queries")
 
 
 def load_settings():
@@ -1037,6 +1039,34 @@ def jobs_prune(days: int | None = typer.Option(None, "--days")):
         await d.open()
         try:
             typer.echo(str(await JobRepository(d, s).prune(days or s.job_retention_days)))
+        finally:
+            await d.close()
+
+    run_async(run())
+
+
+@queries_app.command("prune")
+def queries_prune(days: int | None = typer.Option(None, "--days")):
+    """Delete old query logs and webhook deliveries from the configured database."""
+
+    async def run():
+        s = load_settings()
+        d = Database(s)
+        await d.open()
+        try:
+            retention = days or s.query_log_retention_days
+            async with d.transaction() as conn:
+                cur = await conn.execute(
+                    f"DELETE FROM {s.db_schema}.query_logs WHERE created_at < now()-(%s * interval '1 day')",
+                    (retention,),
+                )
+                queries = cur.rowcount
+                cur = await conn.execute(
+                    f"DELETE FROM {s.db_schema}.webhook_deliveries WHERE received_at < now()-(%s * interval '1 day')",
+                    (s.webhook_delivery_retention_days,),
+                )
+                deliveries = cur.rowcount
+            typer.echo(json.dumps({"query_logs": queries, "webhook_deliveries": deliveries}))
         finally:
             await d.close()
 

@@ -107,6 +107,7 @@ class Repo(ValueModel):
     pinned: bool = False
     remote_sha: str | None = None
     remote_checked_at: object | None = None
+    public: bool = True
 
 
 class RepoRegistration(ValueModel):
@@ -254,6 +255,8 @@ class Citation(ValueModel):
     end_line: int
     commit_sha: str
     url: str | None = None
+    snippet: str = ""
+    snippet_truncated: bool = False
 
 
 class GenerationEvent(ValueModel):

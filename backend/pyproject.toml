@@ -30,6 +30,7 @@ build-backend = "setuptools.build_meta"
 
 [project.scripts]
 cartographer = "app.cli:app"
+cartographer-api = "app.serve:main"
 
 [tool.uv]
 package = true

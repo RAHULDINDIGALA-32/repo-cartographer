@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     api_run_worker: bool = False
     pool_warmup: bool = True
     docs_enabled: bool | None = None
+    query_log_retention_days: int = Field(90, ge=1)
+    stored_answer_max_chars: int | None = Field(None, ge=0)
+    github_webhook_secret: SecretStr = SecretStr("")
+    webhook_delivery_retention_days: int = Field(14, ge=1)
     max_repos: int = Field(5, ge=1)
     max_repo_files: int = Field(5000, ge=1)
     max_file_bytes: int = Field(500_000, ge=1)

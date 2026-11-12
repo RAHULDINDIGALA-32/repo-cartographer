@@ -24,6 +24,7 @@ from app.db.pool import Database
 from app.ingestion.indexer import Indexer
 from app.jobs.scheduler import Scheduler
 from app.jobs.worker import Worker
+from app.observability import metrics
 from app.repos_git.manager import RepoManager
 
 if sys.platform == "win32":
@@ -143,6 +144,18 @@ def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None
             if content_length and int(content_length) > runtime.max_request_body_bytes:
                 return _error_body(request, "request_too_large", "Request body is too large", 413)
             response = await call_next(request)
+            route = getattr(request.scope.get("route"), "path", None) or "unmatched"
+            status_class = str(response.status_code // 100) + "xx"
+            metrics.inc(
+                "http_requests_total", method=request.method, route=route, status_class=status_class
+            )
+            metrics.observe(
+                "http_request_duration_seconds",
+                time.perf_counter() - started,
+                method=request.method,
+                route=route,
+                status_class=status_class,
+            )
             response.headers["X-Request-ID"] = request.state.request_id
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["X-Frame-Options"] = "DENY"
@@ -172,6 +185,15 @@ def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None
     @app.get("/health")
     async def health():
         return {"ok": True}
+
+    @app.get("/metrics")
+    async def metrics_endpoint(request: Request):
+        from app.api.security import require_admin
+
+        require_admin(request)
+        from fastapi.responses import PlainTextResponse
+
+        return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")
 
     @app.get("/ready")
     async def ready(request: Request):

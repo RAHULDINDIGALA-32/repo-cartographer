@@ -5,6 +5,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY backend/app ./app
 COPY backend/migrations ./migrations
 COPY config.yaml ./config.yaml
+COPY config ./config
 RUN uv sync --frozen --no-dev
 RUN mkdir -p /opt/tiktoken && TIKTOKEN_CACHE_DIR=/opt/tiktoken .venv/bin/python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
 RUN .venv/bin/python -c "import fastapi, uvicorn, psycopg, tiktoken"
@@ -22,4 +23,4 @@ RUN mkdir -p /app/data && chown -R app:app /app
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
-CMD ["sh", "-c", "exec /app/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "exec /app/.venv/bin/python -m app.serve"]

@@ -18,7 +18,7 @@ class RepoStore:
         return (
             f"SELECT id,url,owner,name,default_branch,indexed_sha,status,last_error,"
             f"last_checked_at,last_queried_at,indexed_at,created_at,updated_at,pinned,"
-            f"remote_sha,remote_checked_at FROM "
+            f"remote_sha,remote_checked_at,public FROM "
             f"{self.schema}.repos {suffix}"
         )
 
@@ -41,6 +41,7 @@ class RepoStore:
             pinned=row[13],
             remote_sha=row[14],
             remote_checked_at=row[15],
+            public=row[16],
         )
 
     async def get_repo(self, repo_id: int) -> Repo:
@@ -78,6 +79,7 @@ class RepoStore:
                         pinned=row[13],
                         remote_sha=row[14],
                         remote_checked_at=row[15],
+                        public=row[16],
                     )
                 ]
             ]
@@ -120,6 +122,7 @@ class RepoStore:
             "pinned",
             "remote_sha",
             "remote_checked_at",
+            "public",
         }
         unknown = set(fields) - allowed
         if unknown:
