@@ -43,7 +43,7 @@ export function Composer({
         maxLength={MAX_QUESTION_CHARS}
         value={value}
         disabled={disabled && !active}
-        placeholder={disabled ? "Backend is waking up…" : "Ask about this codebase…"}
+        placeholder={disabled ? "Sever is waking up" : "Ask about this codebase"}
         onChange={(event) => {
           setValue(event.target.value);
           resize();

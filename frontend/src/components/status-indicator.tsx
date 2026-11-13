@@ -3,12 +3,12 @@ import type { BackendState } from "@/api/types";
 export function StatusIndicator({ state, elapsed }: { state: BackendState; elapsed: number }) {
   const label =
     state === "ready"
-      ? "Backend ready"
+      ? "Server healthy"
       : state === "waking"
-        ? `Waking backend (${elapsed}s)`
+        ? `Waking server (${elapsed}s)`
         : state === "degraded"
-          ? "Backend degraded"
-          : "Backend unavailable";
+          ? "Server degraded"
+          : "Server unavailable";
   return (
     <span className={`status status-${state}`} title={label}>
       <span className="status-dot" aria-hidden />

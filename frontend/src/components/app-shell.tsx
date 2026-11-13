@@ -1,6 +1,6 @@
 "use client";
 
-import { Github } from "lucide-react";
+//import { Github } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND_NAME } from "@/api/config";
 import type { Repository } from "@/api/types";
@@ -67,14 +67,14 @@ export function AppShell({ requestedRepoId }: { requestedRepoId?: number }) {
           <div className="wake-card" role="status">
             <strong>Waking up the server</strong>
             <br />
-            This free-tier host may sleep when idle. The first request can take up to a minute.
+            This host may sleep when idle. The first request can take up to a minute.
             <div className="shimmer" />
             {backend.elapsed > 0 && <small>{backend.elapsed}s elapsed</small>}
           </div>
         )}
         {backend.state === "down" && (
           <div className="notice" role="alert">
-            <strong>The backend is unavailable.</strong>
+            <strong>The server is unavailable.</strong>
             <br />
             {backend.error ?? "Please try again."}{" "}
             <button type="button" onClick={backend.retry}>
@@ -149,7 +149,7 @@ export function AppShell({ requestedRepoId }: { requestedRepoId?: number }) {
       </div>
       <footer className="footer">
         <span>
-          Public GitHub repositories, grounded answers.</span>
+          Public GitHub repositories, grounded & cited answers.</span>
       </footer>
     </div>
   );
