@@ -58,3 +58,34 @@ def test_token_bucket_burst_and_refill():
     import asyncio
 
     asyncio.run(run())
+
+
+def test_zero_wait_ask_reserves_available_slot(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    import app.api.routes as routes
+
+    async def no_budget(*_args):
+        return None
+
+    monkeypatch.setattr(routes, "_ask_budget", no_budget)
+    request = SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                ask_slots=asyncio.Semaphore(1),
+                active_asks=0,
+                settings=SimpleNamespace(ask_queue_wait_ms=0),
+            )
+        ),
+        state=SimpleNamespace(),
+    )
+
+    async def run():
+        await routes._reserve_ask(request, "test")
+        assert request.state.ask_slot_acquired is True
+        assert request.app.state.active_asks == 1
+        routes._release_ask(request)
+        assert request.app.state.active_asks == 0
+
+    asyncio.run(run())

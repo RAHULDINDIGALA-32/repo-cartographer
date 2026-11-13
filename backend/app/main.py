@@ -7,14 +7,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.limiter import TokenBucketLimiter
 from app.api.routes import _error, router
-from app.api.security import supplied_request_id
+from app.api.security import require_admin, supplied_request_id
 from app.config.pipeline import PipelineConfig
 from app.config.settings import Settings
 from app.core.errors import AppError, DatabaseError
@@ -126,11 +126,12 @@ def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None
         burst=runtime.rate_limit_write_per_minute,
     )
     app.state.ask_slots = asyncio.Semaphore(runtime.max_concurrent_asks)
+    app.state.active_asks = 0
     app.add_middleware(
         CORSMiddleware,
         allow_origins=runtime.cors_origins,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+        allow_headers=["Content-Type", "X-API-Key", "Authorization", "X-Request-ID"],
         expose_headers=["X-Request-ID", "Retry-After"],
     )
 
@@ -187,10 +188,7 @@ def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None
         return {"ok": True}
 
     @app.get("/metrics")
-    async def metrics_endpoint(request: Request):
-        from app.api.security import require_admin
-
-        require_admin(request)
+    async def metrics_endpoint(request: Request, _: str = Depends(require_admin)):
         from fastapi.responses import PlainTextResponse
 
         return PlainTextResponse(metrics.render(), media_type="text/plain; version=0.0.4")

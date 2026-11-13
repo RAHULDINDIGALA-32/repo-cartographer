@@ -41,3 +41,5 @@ def test_b9_routes_are_present_in_openapi(monkeypatch):
     assert "/v1/admin/stats" in paths
     assert "/v1/admin/queries" in paths
     assert "/v1/webhooks/github" in paths
+    assert {"APIKeyHeader": []} in paths["/v1/admin/stats"]["get"]["security"]
+    assert {"HTTPBearer": []} in paths["/v1/admin/stats"]["get"]["security"]

@@ -4,11 +4,16 @@ import hashlib
 import hmac
 import re
 
-from fastapi import Request
+from fastapi import Depends, Request
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.errors import ForbiddenError, UnauthorizedError
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9._:-]{1,100}$")
+_admin_api_key = APIKeyHeader(name="X-API-Key", auto_error=False)
+_admin_bearer = HTTPBearer(auto_error=False)
+_admin_api_key_dependency = Depends(_admin_api_key)
+_admin_bearer_dependency = Depends(_admin_bearer)
 
 
 def request_id(request: Request) -> str:
@@ -32,9 +37,18 @@ def supplied_request_id(request: Request) -> str | None:
     return value if value and _REQUEST_ID.fullmatch(value) else None
 
 
-def require_admin(request: Request) -> str:
+def require_admin(
+    request: Request,
+    api_key: str | None = _admin_api_key_dependency,
+    bearer: HTTPAuthorizationCredentials | None = _admin_bearer_dependency,
+) -> str:
     settings = request.app.state.settings
-    supplied = request.headers.get("x-api-key")
+    # Direct calls from is_admin()/metrics use the request-header fallback;
+    # FastAPI injects the documented security dependencies for route calls.
+    supplied = api_key if isinstance(api_key, str) else None
+    if supplied is None and isinstance(bearer, HTTPAuthorizationCredentials):
+        supplied = bearer.credentials
+    supplied = supplied or request.headers.get("x-api-key")
     if not supplied:
         raise UnauthorizedError("Admin API key required")
     for index, secret in enumerate(settings.api_admin_keys):
