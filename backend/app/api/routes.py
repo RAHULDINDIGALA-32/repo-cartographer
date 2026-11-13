@@ -54,7 +54,9 @@ def _public_event(event: dict, body: AskRequest) -> dict:
     result = dict(event)
     if event.get("kind") == "retrieval":
         context = event.get("context", [])
-        result["context"] = context if body.options and body.options.include_context else []
+        result["context"] = (
+            context if body.options and body.options.include_context else []
+        )
         if not result["context"]:
             result.pop("context", None)
         result["inspector_context_available"] = bool(context)
@@ -82,9 +84,19 @@ def _record_ask_event(event: dict, *, stream: bool):
                 metrics.observe("ask_stage_duration_seconds", value / 1000, stage=stage)
         provider = event.get("provider") or "unknown"
         if event.get("tokens_in") is not None:
-            metrics.inc("ask_tokens_total", event["tokens_in"], direction="in", provider=provider)
+            metrics.inc(
+                "ask_tokens_total",
+                event["tokens_in"],
+                direction="in",
+                provider=provider,
+            )
         if event.get("tokens_out") is not None:
-            metrics.inc("ask_tokens_total", event["tokens_out"], direction="out", provider=provider)
+            metrics.inc(
+                "ask_tokens_total",
+                event["tokens_out"],
+                direction="out",
+                provider=provider,
+            )
         for component in event.get("degraded", []) or []:
             metrics.inc("degraded_total", component=component)
     elif kind == "citations":
@@ -107,7 +119,9 @@ def _record_ask_event(event: dict, *, stream: bool):
 
 
 def _error(request: Request, exc: AppError, *, status: int | None = None):
-    retryable = bool(getattr(exc, "retryable", False)) or (status or exc.http_status) in {429, 503}
+    retryable = bool(getattr(exc, "retryable", False)) or (
+        status or exc.http_status
+    ) in {429, 503}
     body = {
         "error": {
             "code": exc.code,
@@ -120,7 +134,9 @@ def _error(request: Request, exc: AppError, *, status: int | None = None):
         body["error"]["details"] = exc.details
     response = JSONResponse(body, status_code=status or exc.http_status)
     if response.status_code in {429, 503}:
-        response.headers["Retry-After"] = str(max(1, int(getattr(exc, "retry_after", 1))))
+        response.headers["Retry-After"] = str(
+            max(1, int(getattr(exc, "retry_after", 1)))
+        )
     return response
 
 
@@ -133,7 +149,11 @@ async def _repo(request: Request, repo_id: int):
 
 async def _rate_limit(request: Request, kind: str):
     identity = client_identity(request, request.app.state.settings.trusted_proxy_count)
-    limiter = request.app.state.ask_limiter if kind == "ask" else request.app.state.write_limiter
+    limiter = (
+        request.app.state.ask_limiter
+        if kind == "ask"
+        else request.app.state.write_limiter
+    )
     if not await limiter.allow(identity):
         raise RateLimitedError("Rate limit exceeded")
     return identity
@@ -177,9 +197,11 @@ async def list_repos(request: Request):
             "remote_checked_at": repo.remote_checked_at,
             "public": repo.public,
             "examples": _examples(repo.ref.url),
-            "staleness": None
-            if repo.remote_sha is None or repo.indexed_sha is None
-            else repo.remote_sha != repo.indexed_sha,
+            "staleness": (
+                None
+                if repo.remote_sha is None or repo.indexed_sha is None
+                else repo.remote_sha != repo.indexed_sha
+            ),
         }
         for repo in repos
     ]
@@ -199,7 +221,9 @@ async def get_repo(request: Request, repo_id: int):
 
 
 @router.post("/repos")
-async def add_repo(request: Request, body: RepoCreateRequest, _: str = Depends(require_admin)):
+async def add_repo(
+    request: Request, body: RepoCreateRequest, _: str = Depends(require_admin)
+):
     registration = await request.app.state.manager.register(body.url)
     result = {
         "repo": registration.repo.model_dump(mode="json"),
@@ -212,16 +236,19 @@ async def add_repo(request: Request, body: RepoCreateRequest, _: str = Depends(r
         result["repo"] = updated.model_dump(mode="json")
     if body.enqueue:
         result["enqueue"] = (
-            await RepoService(request.app.state.db, request.app.state.settings).enqueue_sync(
-                registration.repo.id, "api"
-            )
+            await RepoService(
+                request.app.state.db, request.app.state.settings
+            ).enqueue_sync(registration.repo.id, "api")
         ).__dict__
     return result
 
 
 @router.delete("/repos/{repo_id}")
 async def delete_repo(
-    request: Request, repo_id: int, override_pin: bool = False, _: str = Depends(require_admin)
+    request: Request,
+    repo_id: int,
+    override_pin: bool = False,
+    _: str = Depends(require_admin),
 ):
     repo = await _repo(request, repo_id)
     if repo.pinned and not override_pin:
@@ -234,9 +261,9 @@ async def delete_repo(
 async def sync_repo(
     request: Request, repo_id: int, body: SyncRequest, _: str = Depends(require_admin)
 ):
-    result = await RepoService(request.app.state.db, request.app.state.settings).enqueue_sync(
-        repo_id, "api", force=body.force, override_pin=body.override_pin
-    )
+    result = await RepoService(
+        request.app.state.db, request.app.state.settings
+    ).enqueue_sync(repo_id, "api", force=body.force, override_pin=body.override_pin)
     return result.__dict__
 
 
@@ -245,9 +272,9 @@ async def repo_jobs(request: Request, repo_id: int, _: str = Depends(require_adm
     await _repo(request, repo_id)
     return [
         asdict(job)
-        for job in await JobRepository(request.app.state.db, request.app.state.settings).list(
-            repo_id=repo_id
-        )
+        for job in await JobRepository(
+            request.app.state.db, request.app.state.settings
+        ).list(repo_id=repo_id)
     ]
 
 
@@ -271,7 +298,9 @@ async def _reserve_ask(request: Request, identity: str):
     if slots.locked() and request.app.state.settings.ask_queue_wait_ms == 0:
         raise ServerBusyError("Ask concurrency limit reached")
     try:
-        await asyncio.wait_for(slots.acquire(), request.app.state.settings.ask_queue_wait_ms / 1000)
+        await asyncio.wait_for(
+            slots.acquire(), request.app.state.settings.ask_queue_wait_ms / 1000
+        )
     except TimeoutError as exc:
         raise ServerBusyError("Ask concurrency limit reached") from exc
 
@@ -303,7 +332,9 @@ async def ask(request: Request, repo_id: int, body: AskRequest):
                         raise TimeoutError
                     done, _ = await asyncio.wait(
                         {current},
-                        timeout=min(remaining, request.app.state.settings.sse_heartbeat_seconds),
+                        timeout=min(
+                            remaining, request.app.state.settings.sse_heartbeat_seconds
+                        ),
                     )
                     if not done:
                         yield ": ping\n\n"
@@ -319,11 +350,15 @@ async def ask(request: Request, repo_id: int, body: AskRequest):
                     yield _sse_frame(number, event.get("kind", "status"), event)
             except AppError as exc:
                 number += 1
-                yield _sse_frame(number, "error", {"code": exc.code, "message": exc.message})
+                yield _sse_frame(
+                    number, "error", {"code": exc.code, "message": exc.message}
+                )
             except TimeoutError:
                 number += 1
                 yield _sse_frame(
-                    number, "error", {"code": "provider_timeout", "message": "Ask timed out"}
+                    number,
+                    "error",
+                    {"code": "provider_timeout", "message": "Ask timed out"},
                 )
             finally:
                 if current:
@@ -350,7 +385,9 @@ async def ask(request: Request, repo_id: int, body: AskRequest):
         raise AppError("Ask timed out") from exc
     finally:
         request.app.state.ask_slots.release()
-    answer = "".join(event.get("text", "") for event in events if event.get("kind") == "token")
+    answer = "".join(
+        event.get("text", "") for event in events if event.get("kind") == "token"
+    )
     return {
         "answer": answer,
         "events": events,
@@ -375,14 +412,18 @@ async def feedback(request: Request, body: FeedbackRequest):
             (body.query_log_id, body.rating, body.comment, identity),
         )
         row = await cur.fetchone()
-    return dict(zip(("id", "query_log_id", "rating", "comment", "created_at"), row, strict=True))
+    return dict(
+        zip(("id", "query_log_id", "rating", "comment", "created_at"), row, strict=True)
+    )
 
 
 @router.get("/queries/{query_id}")
 async def query_log(request: Request, query_id: int, _: str = Depends(require_admin)):
     schema = request.app.state.settings.db_schema
     async with request.app.state.db.connection() as conn:
-        cur = await conn.execute(f"SELECT * FROM {schema}.query_logs WHERE id=%s", (query_id,))
+        cur = await conn.execute(
+            f"SELECT * FROM {schema}.query_logs WHERE id=%s", (query_id,)
+        )
         row = await cur.fetchone()
         if row is None:
             raise NotFoundError("Query log not found")
@@ -478,9 +519,11 @@ async def admin_stats(
             "id": repo.id,
             "indexed_sha": repo.indexed_sha,
             "indexed_at": repo.indexed_at,
-            "stale": None
-            if repo.remote_sha is None or repo.indexed_sha is None
-            else repo.remote_sha != repo.indexed_sha,
+            "stale": (
+                None
+                if repo.remote_sha is None or repo.indexed_sha is None
+                else repo.remote_sha != repo.indexed_sha
+            ),
             "drift_chunks": None,
             "last_reuse_ratio": None,
         }
@@ -499,7 +542,10 @@ async def admin_stats(
             "down": sum(count for rating, count in feedback_rows if rating == -1),
         },
         "budgets": {
-            "ask": {"used": tokens_out, "limit": request.app.state.settings.ask_daily_token_budget},
+            "ask": {
+                "used": tokens_out,
+                "limit": request.app.state.settings.ask_daily_token_budget,
+            },
             "auto_sync": {
                 "used": auto_sync_tokens,
                 "limit": request.app.state.settings.auto_sync_daily_token_budget,
@@ -615,9 +661,14 @@ async def github_webhook(request: Request):
     except Exception:
         return {"ok": True, "ignored": "invalid_repository"}
     repo = await request.app.state.manager.store.get_repo_by_url(canonical)
-    if repo is None or not repo.public or repo.pinned or ref != f"refs/heads/{repo.default_branch}":
+    if (
+        repo is None
+        or not repo.public
+        or repo.pinned
+        or ref != f"refs/heads/{repo.default_branch}"
+    ):
         return {"ok": True, "ignored": "unregistered_pinned_or_non_default_branch"}
-    queued = await RepoService(request.app.state.db, request.app.state.settings).enqueue_sync(
-        repo.id, "webhook"
-    )
+    queued = await RepoService(
+        request.app.state.db, request.app.state.settings
+    ).enqueue_sync(repo.id, "webhook")
     return {"ok": True, "repo_id": repo.id, "enqueue": queued.__dict__}

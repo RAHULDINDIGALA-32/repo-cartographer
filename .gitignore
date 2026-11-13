@@ -148,6 +148,18 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
+
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+!.env.example
+coverage/
+
+
 # Dev Files
 docs/
 

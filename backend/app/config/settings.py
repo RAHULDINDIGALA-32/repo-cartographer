@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("../data")
     log_level: str = "INFO"
     log_format: Literal["console", "json"] | None = None
-    cors_origins: list[str] = ["http://localhost:5173"]
+    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     api_admin_keys: list[SecretStr] = []
     trusted_proxy_count: int = Field(0, ge=0)
     default_preset: str = "dense"
