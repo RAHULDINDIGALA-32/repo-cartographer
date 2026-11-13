@@ -53,7 +53,7 @@ class BM25Retriever:
             return cached
         async with self.db.connection() as conn:
             cur = await conn.execute(
-                f"SELECT c.id,c.file_id,c.repo_id,f.path,c.symbol,c.symbol_type,c.parent_symbol,c.start_line,c.end_line,c.text,c.content_hash,c.search_text,c.token_count,c.chunker_version,c.enricher_version,c.embedder_version,0.0 FROM {self.schema}.chunks c JOIN {self.schema}.files f ON f.id=c.file_id WHERE c.repo_id=%s ORDER BY c.id",
+                f"SELECT c.id,c.file_id,c.repo_id,f.path,c.symbol,c.symbol_type,c.parent_symbol,c.start_line,c.end_line,c.text,c.content_hash,c.search_text,c.token_count,c.chunker_version,c.enricher_version,c.embedder_version,0.0,f.language FROM {self.schema}.chunks c JOIN {self.schema}.files f ON f.id=c.file_id WHERE c.repo_id=%s ORDER BY c.id",
                 (repo_id,),
             )
             rows = await cur.fetchall()
@@ -83,7 +83,16 @@ class BM25Retriever:
             self.cache.popitem(last=False)
         return value
 
-    async def retrieve(self, repo_id: int, analysis, top_k: int, **_) -> list:
+    async def retrieve(
+        self,
+        repo_id: int,
+        analysis,
+        top_k: int,
+        *,
+        path_prefix: str | None = None,
+        language: str | None = None,
+        **_,
+    ) -> list:
         tokens = query_tokens(analysis)
         if not tokens:
             return []
@@ -101,7 +110,13 @@ class BM25Retriever:
                     1 - b + b * index.lengths[doc] / max(1, index.avg_length)
                 )
                 scores[doc] = scores.get(doc, 0.0) + idf * frequency * (k1 + 1) / denominator
-        ordered = sorted(scores, key=lambda doc: (-scores[doc], index.rows[doc][0]))[
+        eligible = [
+            doc
+            for doc in scores
+            if (not path_prefix or index.rows[doc][3].startswith(path_prefix.rstrip("/") + "/"))
+            and (not language or str(index.rows[doc][17]).lower() == language.lower())
+        ]
+        ordered = sorted(eligible, key=lambda doc: (-scores[doc], index.rows[doc][0]))[
             : max(0, int(top_k))
         ]
         hits = [
@@ -112,5 +127,7 @@ class BM25Retriever:
             "tokens": tokens,
             "ids": [hit.chunk.id for hit in hits],
             "cache": "hit" if self._last_cache_hit else "miss",
+            "path_prefix": path_prefix,
+            "language": language,
         }
         return hits

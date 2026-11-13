@@ -86,13 +86,29 @@ class SparseRetriever:
         self.last_status: str | None = None
 
     async def retrieve(
-        self, repo_id: int, analysis: QueryAnalysis, top_k: int, **_
+        self,
+        repo_id: int,
+        analysis: QueryAnalysis,
+        top_k: int,
+        *,
+        path_prefix: str | None = None,
+        language: str | None = None,
+        **_,
     ) -> list[RetrievalHit]:
         tokens = query_tokens(analysis)
         if not tokens:
             self.last_trace = {"tokens": []}
             return []
         tsquery = " | ".join(f"{token}:*" for token in tokens)
+        filters = ["c.repo_id=%s", "c.fts @@ query.q"]
+        params: list[object] = [tsquery, repo_id]
+        if path_prefix:
+            filters.append("f.path LIKE %s")
+            params.append(path_prefix.rstrip("/") + "/%")
+        if language:
+            filters.append("lower(f.language)=lower(%s)")
+            params.append(language)
+        params.append(max(0, int(top_k)))
         sql = f"""WITH query AS (SELECT to_tsquery('simple', %s) AS q)
             SELECT c.id,c.file_id,c.repo_id,f.path,c.symbol,c.symbol_type,c.parent_symbol,
                    c.start_line,c.end_line,c.text,c.content_hash,c.search_text,c.token_count,
@@ -100,10 +116,10 @@ class SparseRetriever:
                    ts_rank_cd(c.fts, query.q, 32) AS score
             FROM {self.schema}.chunks c
             JOIN {self.schema}.files f ON f.id=c.file_id CROSS JOIN query
-            WHERE c.repo_id=%s AND c.fts @@ query.q
+            WHERE {" AND ".join(filters)}
             ORDER BY score DESC,c.id ASC LIMIT %s"""
         async with self.db.connection() as conn:
-            cur = await conn.execute(sql, (tsquery, repo_id, max(0, int(top_k))))
+            cur = await conn.execute(sql, params)
             rows = await cur.fetchall()
             state = await conn.execute(
                 f"SELECT status,indexed_sha FROM {self.schema}.repos WHERE id=%s", (repo_id,)
@@ -115,7 +131,12 @@ class SparseRetriever:
             raise NotFoundError("Repository not found")
         self.last_status, self.last_indexed_sha = state_row
         hits = [_hit(row, rank) for rank, row in enumerate(rows, 1)]
-        self.last_trace = {"tokens": tokens, "ids": [hit.chunk.id for hit in hits]}
+        self.last_trace = {
+            "tokens": tokens,
+            "ids": [hit.chunk.id for hit in hits],
+            "path_prefix": path_prefix,
+            "language": language,
+        }
         return hits
 
 
@@ -131,23 +152,42 @@ class SymbolRetriever:
         self.last_status: str | None = None
 
     async def retrieve(
-        self, repo_id: int, analysis: QueryAnalysis, top_k: int, **_
+        self,
+        repo_id: int,
+        analysis: QueryAnalysis,
+        top_k: int,
+        *,
+        path_prefix: str | None = None,
+        language: str | None = None,
+        **_,
     ) -> list[RetrievalHit]:
         identifiers = [value for value in analysis.identifiers if value]
         if not identifiers:
             return []
+        values = [value.lower() for value in identifiers]
+        filters = [
+            "c.repo_id=%s",
+            "(lower(c.symbol)=ANY(%s) OR lower(c.parent_symbol)=ANY(%s))",
+        ]
+        params: list[object] = [values, repo_id, values, values]
+        if path_prefix:
+            filters.append("f.path LIKE %s")
+            params.append(path_prefix.rstrip("/") + "/%")
+        if language:
+            filters.append("lower(f.language)=lower(%s)")
+            params.append(language)
+        params.append(max(0, int(top_k)))
         sql = f"""SELECT c.id,c.file_id,c.repo_id,f.path,c.symbol,c.symbol_type,c.parent_symbol,
                    c.start_line,c.end_line,c.text,c.content_hash,c.search_text,c.token_count,
                    c.chunker_version,c.enricher_version,c.embedder_version,
                    CASE WHEN lower(c.symbol) = ANY(%s) THEN 2.0 ELSE 1.0 END AS score
             FROM {self.schema}.chunks c JOIN {self.schema}.files f ON f.id=c.file_id
-            WHERE c.repo_id=%s AND (lower(c.symbol)=ANY(%s) OR lower(c.parent_symbol)=ANY(%s))
+            WHERE {" AND ".join(filters)}
             ORDER BY score DESC,
                      CASE WHEN c.symbol_type IN ('function','method','class') THEN 0 ELSE 1 END,
                      c.id ASC LIMIT %s"""
-        values = [value.lower() for value in identifiers]
         async with self.db.connection() as conn:
-            cur = await conn.execute(sql, (values, repo_id, values, values, max(0, int(top_k))))
+            cur = await conn.execute(sql, params)
             rows = await cur.fetchall()
             state = await conn.execute(
                 f"SELECT status,indexed_sha FROM {self.schema}.repos WHERE id=%s", (repo_id,)

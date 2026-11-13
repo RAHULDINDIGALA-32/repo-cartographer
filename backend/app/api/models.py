@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class StrictModel(BaseModel):
@@ -22,9 +22,24 @@ class SyncRequest(StrictModel):
 
 class AskOptions(StrictModel):
     k: int | None = Field(default=None, ge=1, le=100)
-    path_prefix: str | None = Field(default=None, max_length=300)
-    language: str | None = Field(default=None, max_length=50)
+    path_prefix: str | None = Field(
+        default=None, max_length=300, json_schema_extra={"example": None}
+    )
+    language: str | None = Field(default=None, max_length=50, json_schema_extra={"example": None})
     include_context: bool = False
+
+    @field_validator("path_prefix", "language", mode="before")
+    @classmethod
+    def normalize_filter(cls, value):
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        cleaned = value.strip()
+        # Swagger UI uses the literal word "string" for optional string
+        # fields unless an example is supplied. Treat that placeholder as an
+        # omitted filter instead of silently filtering every result out.
+        return None if cleaned.lower() == "string" or not cleaned else cleaned
 
 
 class AskRequest(StrictModel):

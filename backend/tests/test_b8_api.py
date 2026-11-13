@@ -1,7 +1,7 @@
 from pydantic import ValidationError
 
 from app.api.limiter import TokenBucketLimiter
-from app.api.models import AskRequest
+from app.api.models import AskOptions, AskRequest
 from app.config.settings import Settings
 from app.models import ChunkRecord, RetrievalHit
 
@@ -26,6 +26,12 @@ def test_api_models_reject_unknown_fields():
         pass
     else:
         raise AssertionError("API request models must be strict")
+
+
+def test_swagger_placeholder_filters_are_treated_as_omitted():
+    options = AskOptions(path_prefix="string", language=" string ")
+    assert options.path_prefix is None
+    assert options.language is None
 
 
 def test_bm25_is_a_valid_retrieval_source():
