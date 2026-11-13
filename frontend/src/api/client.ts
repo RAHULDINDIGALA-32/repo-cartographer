@@ -94,7 +94,7 @@ export const postFeedback = (
   payload: { query_log_id: number; rating: -1 | 1; comment?: string },
   signal?: AbortSignal,
 ) =>
-  request<{ ok: boolean }>("/v1/feedback", {
+  request<Record<string, unknown>>("/v1/feedback", {
     method: "POST",
     body: JSON.stringify(payload),
     signal,

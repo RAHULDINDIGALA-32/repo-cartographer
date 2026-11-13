@@ -3,7 +3,15 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-export function Markdown({ text, citations = [] }: { text: string; citations?: number[] }) {
+export function Markdown({
+  text,
+  citations = [],
+  onCitation,
+}: {
+  text: string;
+  citations?: number[];
+  onCitation?: (index: number) => void;
+}) {
   const marker = (value: string) =>
     value.replace(/\[(\d+)\]/g, (_, index: string) =>
       citations.includes(Number(index)) ? `⟦${index}⟧` : `[${index}]`,
@@ -23,11 +31,7 @@ export function Markdown({ text, citations = [] }: { text: string; citations?: n
                     key={index}
                     type="button"
                     title={`Source ${part.slice(1, -1)}`}
-                    onClick={() =>
-                      document
-                        .getElementById(`source-${part.slice(1, -1)}`)
-                        ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                    }
+                    onClick={() => onCitation?.(Number(part.slice(1, -1)))}
                   >
                     {part.slice(1, -1)}
                   </button>

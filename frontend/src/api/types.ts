@@ -15,6 +15,16 @@ export type Repository = {
   staleness: boolean | null;
 };
 
+export type RepoSnapshot = {
+  id: number;
+  owner: string;
+  name: string;
+  url: string;
+  defaultBranch?: string;
+  indexedSha: string | null;
+  indexedAt: string | null;
+};
+
 export type RepoDetail = {
   repo: Repository;
   runs: Array<Record<string, unknown>>;
@@ -51,6 +61,9 @@ export type RetrievalEvent = {
   top_score?: number | null;
   indexed_sha?: string | null;
   hits?: Array<Record<string, unknown>>;
+  ranked?: Array<Record<string, unknown>>;
+  context?: Array<Record<string, unknown>>;
+  dropped?: number;
 };
 
 export type StatusEvent = { kind: "status"; text?: string };

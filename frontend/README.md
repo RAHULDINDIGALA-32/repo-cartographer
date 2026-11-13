@@ -1,6 +1,6 @@
 # repo-cartographer frontend
 
-The F1 frontend is a client-rendered Next.js App Router application. It calls
+The F1/F2 frontend is a client-rendered Next.js App Router application. It calls
 the FastAPI backend directly, including the POST/SSE ask stream; it never puts
 backend credentials in the browser and never proxies ask requests through
 Next.js.
@@ -45,8 +45,25 @@ In Vercel, set Root Directory to `frontend`, use the Next.js preset, and set
 environment. Add the local and production frontend origins to the backend
 `CORS_ORIGINS`, then deploy the backend before testing the frontend.
 
+## F2 sessions and explainability
+
+Completed turns are stored locally in versioned IndexedDB (`repo-cartographer`,
+up to 100 turns and 5 MB). History is device-local and is never sent to the
+backend. Settings can disable persistence, hide retrieval details, or clear
+the local store. Source cards open validated commit-pinned GitHub links; the
+viewer shows returned snippets, line numbers, navigation, and a latest-branch
+link. The optional Context inspector is requested with `include_context=true`
+and is capped to the first 20 ranked rows in the UI.
+
+The command palette is available with `Ctrl/Cmd+K` and searches repositories and
+stored turns. Share links only prefill a question (`?q=`); they never submit it
+automatically. Completed answers support copy, Markdown copy, export, and
+optimistic thumbs feedback. Reduced-motion CSS is respected.
+
 ## Known limitations
 
-The source viewer, retrieval inspector, history, sharing, admin views, and
-feedback controls are intentionally deferred to later frontend phases. The
-first F1 build should be run outside OneDrive for reliable dependency caching.
+Admin views, server-side history, multi-device sync, and answer regeneration
+remain out of scope. Run the frontend build and Vitest outside OneDrive when
+possible because Windows OneDrive file locking can prevent esbuild from
+accessing its temporary directory; CI is the authoritative clean-environment
+test.

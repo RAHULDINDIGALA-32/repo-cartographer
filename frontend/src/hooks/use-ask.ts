@@ -2,14 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { askStream } from "@/api/client";
-import type { AskEvent, Citation, DoneEvent } from "@/api/types";
+import type { AskEvent, Citation, DoneEvent, RepoSnapshot, RetrievalEvent } from "@/api/types";
 
 export type Turn = {
   id: string;
+  repo: RepoSnapshot;
   question: string;
   answer: string;
   state: "submitting" | "searching" | "thinking" | "streaming" | "complete" | "stopped" | "error";
   citations: Citation[];
+  retrieval?: RetrievalEvent;
+  validation?: Record<string, unknown>;
+  feedback?: -1 | 1;
+  createdAt: number;
   done?: DoneEvent;
   error?: {
     code: string;
@@ -20,7 +25,7 @@ export type Turn = {
   };
 };
 
-export function useAsk(repoId: number | undefined) {
+export function useAsk(repo: RepoSnapshot | undefined, includeContext = false) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [active, setActive] = useState(false);
   const controller = useRef<AbortController | null>(null);
@@ -52,12 +57,29 @@ export function useAsk(repoId: number | undefined) {
     },
     [],
   );
+  const hydrate = useCallback(
+    (history: Turn[]) => setTurns([...history].sort((a, b) => a.createdAt - b.createdAt)),
+    [],
+  );
+  const setFeedback = useCallback(
+    (id: string, feedback: -1 | 1 | undefined) =>
+      setTurns((current) => current.map((item) => (item.id === id ? { ...item, feedback } : item))),
+    [],
+  );
 
   const ask = useCallback(
     async (question: string) => {
-      if (!repoId || active) return;
+      if (!repo || active) return;
       const id = crypto.randomUUID();
-      const turn: Turn = { id, question, answer: "", state: "submitting", citations: [] };
+      const turn: Turn = {
+        id,
+        repo,
+        question,
+        answer: "",
+        state: "submitting",
+        citations: [],
+        createdAt: Date.now(),
+      };
       setTurns((current) => [...current, turn]);
       setActive(true);
       const update = (change: Partial<Turn>) =>
@@ -67,9 +89,13 @@ export function useAsk(repoId: number | undefined) {
       const abort = new AbortController();
       controller.current = abort;
       try {
-        for await (const event of askStream(repoId, question, {}, abort.signal)) {
+        for await (const event of askStream(
+          repo.id,
+          question,
+          { include_context: includeContext },
+          abort.signal,
+        ))
           consumeEvent(event, update, (text) => appendToken(id, text));
-        }
       } catch (caught) {
         const error = caught as {
           code?: string;
@@ -93,7 +119,7 @@ export function useAsk(repoId: number | undefined) {
         setActive(false);
       }
     },
-    [active, appendToken, repoId],
+    [active, appendToken, includeContext, repo],
   );
 
   const stop = useCallback(() => {
@@ -105,7 +131,7 @@ export function useAsk(repoId: number | undefined) {
     );
     setActive(false);
   }, []);
-  return { turns, active, ask, stop };
+  return { turns, active, ask, stop, hydrate, setFeedback };
 }
 
 function consumeEvent(
@@ -113,10 +139,11 @@ function consumeEvent(
   update: (change: Partial<Turn>) => void,
   append: (text: string) => void,
 ) {
-  if (event.kind === "retrieval") update({ state: "searching" });
+  if (event.kind === "retrieval") update({ state: "searching", retrieval: event });
   else if (event.kind === "status") update({ state: "thinking" });
   else if (event.kind === "token") append(event.text);
-  else if (event.kind === "citations") update({ citations: event.citations });
+  else if (event.kind === "citations")
+    update({ citations: event.citations, validation: event.validation });
   else if (event.kind === "done") update({ state: "complete", done: event });
   else if (event.kind === "error")
     update({
