@@ -1,18 +1,19 @@
 import type { Citation, DoneEvent, RepoSnapshot } from "@/api/types";
 
 export function repoSnapshot(
-  url: string,
+  url: string | null | undefined,
   id: number,
   indexedSha?: string | null,
   indexedAt?: string | null,
   defaultBranch?: string | null,
 ): RepoSnapshot {
-  const parts = url.replace(/\/$/, "").split("/");
+  const normalized = typeof url === "string" ? url.trim().replace(/\/$/, "") : "";
+  const parts = normalized.split("/");
   return {
     id,
     owner: parts.at(-2) ?? "repository",
     name: parts.at(-1) ?? "codebase",
-    url: url.replace(/\/$/, ""),
+    url: normalized,
     defaultBranch: defaultBranch ?? undefined,
     indexedSha: indexedSha ?? null,
     indexedAt: indexedAt ?? null,
@@ -41,6 +42,7 @@ function encodedPath(path: string) {
 }
 
 export function citationLink(citation: Citation, repo: RepoSnapshot, done?: DoneEvent) {
+  if (!repo.url) return "#";
   if (validGitHubUrl(citation.permalink, repo)) return citation.permalink!;
   const sha = citation.commit_sha ?? done?.staleness?.indexed_sha ?? repo.indexedSha;
   const path = encodedPath(citation.path);

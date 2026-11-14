@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 import { adminRepo } from "@/api/admin";
 import type { AdminJob, RepoDetail } from "@/api/types";
 import { useAdminSession } from "@/admin/session";
@@ -50,8 +51,13 @@ export default function JobsPage() {
           <h1>Repository #{id}</h1>
           <p>Bounded polling pauses when this tab is hidden.</p>
         </div>
-        <button className="meta-action" onClick={() => void load()}>
-          Refresh
+        <button
+          className="text-button"
+          onClick={() => void load()}
+          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+        >
+          <RefreshCw size={14} />
+          <span>Refresh</span>
         </button>
       </div>
       {error && <div className="alert">{error}</div>}

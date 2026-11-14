@@ -44,9 +44,6 @@ function freshness(turn: TurnModel) {
     ];
   return ["", "Freshness unknown"];
 }
-function absoluteTime(value: number) {
-  return new Date(value).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-}
 
 export function Turn({
   turn,
@@ -105,8 +102,17 @@ export function Turn({
           <i aria-hidden />
           {repoName} <ExternalLink size={12} aria-hidden />
         </a>
-        <time title={absoluteTime(turn.createdAt)}>
-          {new Date(turn.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        <time>
+          {new Date(turn.createdAt).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+          })}{" "}
+          {new Date(turn.createdAt).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          })}
         </time>
       </div>
       <div className="question">{turn.question}</div>
@@ -198,28 +204,38 @@ export function Turn({
               Degraded
             </span>
           ) : null}
-          <button className="icon-button" type="button" aria-label="Copy answer" onClick={copy}>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Copy answer"
+            title="Copy answer"
+            onClick={copy}
+          >
             <Copy size={14} aria-hidden />
           </button>
           <button
-            className="meta-action"
+            className="text-button"
             type="button"
-            onClick={() =>
-              void navigator.clipboard.writeText(
-                `${window.location.origin}/r/${turn.repo.id}?q=${encodeURIComponent(turn.question)}`,
-              )
-            }
+            onClick={() => {
+              void navigator.clipboard
+                .writeText(
+                  `${window.location.origin}/r/${turn.repo.id}?q=${encodeURIComponent(turn.question)}`,
+                )
+                .then(() => toast.success("Chat link copied"))
+                .catch(() => toast.error("Chat link could not be copied"));
+            }}
           >
-            Copy link
+            Copy chat link
           </button>
           {turn.done?.query_log_id && (
-            <a className="meta-action" href={`/admin/queries/${turn.done.query_log_id}`}>
+            <a className="text-button" href={`/admin/queries/${turn.done.query_log_id}`}>
               Open trace
             </a>
           )}
-          <button className="meta-action" type="button" onClick={() => void copyMarkdown()}>
-            Copy markdown
+          <button className="text-button" type="button" onClick={() => void copyMarkdown()}>
+            Copy as markdown
           </button>
+          {/*
           <details className="details">
             <summary>How this was answered</summary>
             <div className="details-grid">
@@ -235,6 +251,7 @@ export function Turn({
               <span>Request: {turn.done?.query_log_id ?? "—"}</span>
             </div>
           </details>
+          */}
           <span className="feedback">
             <button
               className={feedback === 1 ? "selected" : ""}

@@ -207,8 +207,11 @@ def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None
                 "ok": True,
                 "details": health_status.model_dump(mode="json"),
                 "worker_enabled": bool(request.app.state.worker),
+                "worker_configured": bool(request.app.state.settings.api_run_worker),
                 "worker_reason": (
-                    None if request.app.state.worker else "worker disabled on this deployment"
+                    None
+                    if request.app.state.worker
+                    else "API_RUN_WORKER=false on this API process"
                 ),
                 "worker_heartbeat_age_seconds": (
                     round(time.monotonic() - request.app.state.worker_started_monotonic, 1)

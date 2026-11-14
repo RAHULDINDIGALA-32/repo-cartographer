@@ -55,7 +55,7 @@ export function AdminSignIn() {
           </div>
         )}
         <button className="send" disabled={busy || !key.trim()}>
-          {busy ? "Checking…" : "Continue"}
+          {busy ? "Checking" : "Continue"}
         </button>
       </form>
     </main>

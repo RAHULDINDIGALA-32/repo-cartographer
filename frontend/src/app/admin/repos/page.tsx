@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pin, RefreshCw } from "lucide-react";
 import { adminReady, adminRepo, createRepo, deleteRepo, syncRepo } from "@/api/admin";
 import type { AdminJob, RepoDetail, Repository } from "@/api/types";
 import { ApiError } from "@/api/types";
@@ -34,7 +35,12 @@ export default function AdminReposPage() {
   const [enqueue, setEnqueue] = useState(true);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [worker, setWorker] = useState<{ enabled?: boolean; reason?: string }>({});
+  const [worker, setWorker] = useState<{
+    enabled?: boolean;
+    configured?: boolean;
+    reason?: string;
+  }>({});
+  const [urlError, setUrlError] = useState("");
   const refresh = useCallback(async () => {
     const values = await session.adminFetch<Repository[]>("/v1/repos");
     setRepos(values);
@@ -47,7 +53,13 @@ export default function AdminReposPage() {
     if (!session.isAdmin) return;
     void refresh().catch((error) => setMessage(errorMessage(error)));
     void adminReady()
-      .then((value) => setWorker({ enabled: value.worker_enabled, reason: value.worker_reason }))
+      .then((value) =>
+        setWorker({
+          enabled: value.worker_enabled,
+          configured: value.worker_configured,
+          reason: value.worker_reason,
+        }),
+      )
       .catch(() => undefined);
   }, [refresh, session.isAdmin]);
   useEffect(() => {
@@ -79,9 +91,10 @@ export default function AdminReposPage() {
   const add = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!isGitHubRepoInput(url)) {
-      setMessage("Enter a GitHub repository URL or owner/name.");
+      setUrlError("Enter a valid GitHub URL or owner/name, for example pallets/flask.");
       return;
     }
+    setUrlError("");
     setBusy(true);
     setMessage("");
     try {
@@ -132,13 +145,18 @@ export default function AdminReposPage() {
           <h1>Repositories</h1>
           <p>Manage indexing, freshness, and incremental-sync cost.</p>
         </div>
-        <button className="meta-action" onClick={() => void refresh()}>
-          Refresh
+        <button
+          className="text-button"
+          onClick={() => void refresh()}
+          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+        >
+          <RefreshCw size={14} />
+          <span>Refresh</span>
         </button>
       </div>
       {!worker.enabled && (
         <div className="notice">
-          <strong>Worker disabled on this deployment.</strong>
+          <strong>Worker disabled on this API process.</strong>
           <br />
           Queued syncs will remain pending until a worker is started
           {worker.reason ? ` (${worker.reason})` : ""}.
@@ -153,12 +171,26 @@ export default function AdminReposPage() {
         <label>
           GitHub repository URL
           <input
+            aria-invalid={Boolean(urlError)}
             value={url}
-            onChange={(event) => setUrl(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value;
+              setUrl(value);
+              if (!value || isGitHubRepoInput(value)) setUrlError("");
+            }}
+            onBlur={() => {
+              if (url && !isGitHubRepoInput(url))
+                setUrlError("Enter a valid GitHub URL or owner/name, for example pallets/flask.");
+            }}
             placeholder="https://github.com/owner/repository"
           />
+          {urlError && (
+            <small className="field-error" role="alert">
+              {urlError}
+            </small>
+          )}
         </label>
-        <label className="check-row">
+        <label className="check-row add-repo-check">
           <input
             type="checkbox"
             checked={enqueue}
@@ -167,7 +199,7 @@ export default function AdminReposPage() {
           Start indexing now
         </label>
         <button className="send" disabled={busy || !url.trim()}>
-          {busy ? "Registering…" : "Add repository"}
+          {busy ? "Registering" : "Add repository"}
         </button>
       </form>
       <section className="admin-list">
@@ -222,8 +254,16 @@ function RepoCard({
           {repoName(repo.url)} ↗
         </a>
         <span className={`status-badge status-${repo.status}`}>{repo.status}</span>
-        {repo.pinned && <span className="meta-chip">🔒 pinned</span>}
-        <span className="meta-chip">{repo.public ? "public" : "hidden"}</span>
+        {repo.pinned && (
+          <span
+            className="meta-chip"
+            style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+          >
+            <Pin size={14} />
+            Pinned
+          </span>
+        )}
+        <span className="meta-chip">{repo.public ? "Public" : "Hidden"}</span>
       </div>
       <div className="repo-facts">
         <span>
@@ -232,10 +272,10 @@ function RepoCard({
         <span>{age(repo.indexed_at)}</span>
         <span className={repo.staleness ? "meta-chip stale" : "meta-chip fresh"}>
           {repo.staleness
-            ? "newer commit known"
+            ? "Newer commit known"
             : repo.staleness === false
-              ? "fresh"
-              : "freshness unknown"}
+              ? "Fresh"
+              : "Freshness unknown"}
         </span>
         {ratio !== null && <span>Reuse {ratio}%</span>}
       </div>
@@ -245,13 +285,13 @@ function RepoCard({
         </div>
       )}
       <div className="repo-actions">
-        <button className="meta-action" onClick={onSync}>
+        <button className="text-button" onClick={onSync}>
           Sync now
         </button>
-        <button className="meta-action" onClick={onJobs}>
+        <button className="text-button" onClick={onJobs}>
           View jobs
         </button>
-        <button className="meta-action danger" onClick={onDelete}>
+        <button className="text-button danger" onClick={onDelete}>
           Delete
         </button>
       </div>

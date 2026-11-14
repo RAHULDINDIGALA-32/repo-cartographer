@@ -31,9 +31,9 @@ const SettingsMenu = dynamic(
 );
 
 function selectStored(repos: Repository[]) {
-  if (typeof window === "undefined") return repos.find((repo) => repo.status === "ready");
+  if (typeof window === "undefined") return repos.find((repo) => repo.status === "Ready");
   const stored = Number(localStorage.getItem("repo-cartographer.repo"));
-  return repos.find((repo) => repo.id === stored) ?? repos.find((repo) => repo.status === "ready");
+  return repos.find((repo) => repo.id === stored) ?? repos.find((repo) => repo.status === "Ready");
 }
 
 export function AppShell({
@@ -44,7 +44,7 @@ export function AppShell({
   initialQuestion?: string;
 }) {
   const backend = useBackendStatus();
-  const reposQuery = useRepos(backend.state === "ready" || backend.state === "degraded");
+  const reposQuery = useRepos(backend.state === "Ready" || backend.state === "Degraded");
   const [repo, setRepo] = useState<Repository>();
   useEffect(() => {
     if (reposQuery.data?.length) {
@@ -145,7 +145,7 @@ export function AppShell({
         </div>
       </header>
       <main className="main" id="main-content">
-        {backend.state === "waking" && (
+        {backend.state === "Waking" && (
           <div className="wake-card" role="status">
             <strong>Waking up the server</strong>
             <br />
@@ -154,7 +154,7 @@ export function AppShell({
             {backend.elapsed > 0 && <small>{backend.elapsed}s elapsed</small>}
           </div>
         )}
-        {backend.state === "down" && (
+        {backend.state === "Down" && (
           <div className="notice" role="alert">
             <strong>The server is unavailable.</strong>
             <br />
@@ -164,12 +164,12 @@ export function AppShell({
             </button>
           </div>
         )}
-        {backend.state === "ready" && reposQuery.isLoading && (
+        {backend.state === "Ready" && reposQuery.isLoading && (
           <div className="empty-state">
             <h1>Loading repositories…</h1>
           </div>
         )}
-        {backend.state === "ready" && reposQuery.isError && (
+        {backend.state === "Ready" && reposQuery.isError && (
           <div className="notice" role="alert">
             Could not load repositories.{" "}
             <button type="button" onClick={() => void reposQuery.refetch()}>
@@ -203,7 +203,7 @@ export function AppShell({
             )}
           </div>
         )}
-        {!repo && backend.state === "ready" && !reposQuery.isLoading && (
+        {!repo && backend.state === "Ready" && !reposQuery.isLoading && (
           <div className="empty-state">
             <h1>No ready repositories</h1>
             <p>An administrator must index a public repository before you can ask questions.</p>
@@ -231,7 +231,7 @@ export function AppShell({
         <Composer
           key={prefill}
           initialValue={prefill}
-          disabled={backend.state !== "ready" || !repo}
+          disabled={backend.state !== "Ready" || !repo}
           active={ask.active}
           onAsk={send}
           onStop={ask.stop}

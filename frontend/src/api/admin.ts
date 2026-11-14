@@ -18,10 +18,29 @@ export type AdminSyncResult = { job_id: number | null; created: boolean; reason:
 export type AdminReady = {
   ok: boolean;
   worker_enabled?: boolean;
+  worker_configured?: boolean;
   worker_reason?: string;
   worker_heartbeat_age_seconds?: number | null;
   details?: Record<string, unknown>;
 };
+
+function normalizeRepoDetail(value: RepoDetail): RepoDetail {
+  const raw = value as RepoDetail & {
+    repo?: RepoDetail["repo"] & { ref?: { url?: string; default_branch?: string | null } };
+  };
+  const repo = raw.repo;
+  if (repo && !repo.url && repo.ref?.url) {
+    return {
+      ...raw,
+      repo: {
+        ...repo,
+        url: repo.ref.url,
+        default_branch: repo.default_branch ?? repo.ref.default_branch ?? "main",
+      },
+    };
+  }
+  return value;
+}
 
 export async function adminRequest<T>(
   key: string,
@@ -48,7 +67,7 @@ export const adminValidate = (key: string) =>
   adminRequest<AdminStats>(key, "/v1/admin/stats?since=24h", { timeoutMs: 10_000 });
 export const adminRepos = (key: string) => adminRequest<Repository[]>(key, "/v1/repos");
 export const adminRepo = (key: string, id: number) =>
-  adminRequest<RepoDetail>(key, `/v1/repos/${id}`);
+  adminRequest<RepoDetail>(key, `/v1/repos/${id}`).then(normalizeRepoDetail);
 export const adminJobs = (key: string, id: number) =>
   adminRequest<AdminJob[]>(key, `/v1/repos/${id}/jobs`);
 export const adminStats = (key: string, since: string, repoId?: number) =>

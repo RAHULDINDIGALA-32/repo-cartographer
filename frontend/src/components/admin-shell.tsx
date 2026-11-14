@@ -36,7 +36,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             {new URL(API_BASE_URL).host}
           </span>
           <button
-            className="meta-action"
+            className="text-button"
             onClick={() => {
               signOut();
               router.replace("/admin");

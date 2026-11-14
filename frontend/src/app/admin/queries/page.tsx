@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 import { adminQueries, adminRepos } from "@/api/admin";
 import type { AdminQueryRow, Repository } from "@/api/types";
 import { useAdminSession } from "@/admin/session";
@@ -57,8 +58,13 @@ export default function AdminQueriesPage() {
           <h1>Query explorer</h1>
           <p>Inspect logged answers and open their RAG traces.</p>
         </div>
-        <button className="meta-action" onClick={() => void load()}>
-          Refresh
+        <button
+          className="text-button"
+          onClick={() => void load()}
+          style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+        >
+          <RefreshCw size={14} />
+          <span>Refresh</span>
         </button>
       </div>
       <div className="admin-filters">

@@ -5,7 +5,7 @@ import { getHealth, getReady } from "@/api/client";
 import { ApiError, type BackendState } from "@/api/types";
 
 export function useBackendStatus() {
-  const [state, setState] = useState<BackendState>("waking");
+  const [state, setState] = useState<BackendState>("Waking");
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
@@ -13,7 +13,7 @@ export function useBackendStatus() {
   const check = useCallback(async () => {
     const current = ++generation.current;
     const started = Date.now();
-    setState("waking");
+    setState("Waking");
     setError(null);
     setElapsed(0);
     const timer = window.setInterval(
@@ -28,7 +28,7 @@ export function useBackendStatus() {
           await getHealth();
           const ready = await getReady();
           if (ready.ok) {
-            setState("ready");
+            setState("Ready");
             return;
           }
         } catch (caught) {
@@ -38,7 +38,7 @@ export function useBackendStatus() {
         delay = Math.min(delay * 1.5, 8_000);
       }
       if (current === generation.current) {
-        setState("down");
+        setState("Down");
         setError("The backend did not become ready in time.");
       }
     } finally {

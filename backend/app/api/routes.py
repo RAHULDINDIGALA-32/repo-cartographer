@@ -50,6 +50,14 @@ def _examples(url: str) -> list[str]:
         return []
 
 
+def _repo_payload(repo) -> dict:
+    payload = repo.model_dump(mode="json")
+    ref = payload.pop("ref", {}) or {}
+    payload["url"] = ref.get("url")
+    payload["default_branch"] = payload.get("default_branch") or ref.get("default_branch")
+    return payload
+
+
 def _public_event(event: dict, body: AskRequest) -> dict:
     result = dict(event)
     if event.get("kind") == "retrieval":
@@ -204,7 +212,7 @@ async def get_repo(request: Request, repo_id: int):
         raise NotFoundError("Repository not found")
     runs = await request.app.state.indexer.runs(repo_id, 5)
     return {
-        "repo": repo.model_dump(mode="json"),
+        "repo": _repo_payload(repo),
         "runs": runs,
         "examples": _examples(repo.ref.url),
     }
@@ -214,14 +222,14 @@ async def get_repo(request: Request, repo_id: int):
 async def add_repo(request: Request, body: RepoCreateRequest, _: str = Depends(require_admin)):
     registration = await request.app.state.manager.register(body.url)
     result = {
-        "repo": registration.repo.model_dump(mode="json"),
+        "repo": _repo_payload(registration.repo),
         "already_existed": registration.already_existed,
     }
     if body.public != registration.repo.public:
         updated = await request.app.state.manager.store.update_repo_fields(
             registration.repo.id, public=body.public
         )
-        result["repo"] = updated.model_dump(mode="json")
+        result["repo"] = _repo_payload(updated)
     if body.enqueue:
         result["enqueue"] = (
             await RepoService(request.app.state.db, request.app.state.settings).enqueue_sync(

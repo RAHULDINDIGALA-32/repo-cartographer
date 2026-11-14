@@ -2,11 +2,11 @@ import type { BackendState } from "@/api/types";
 
 export function StatusIndicator({ state, elapsed }: { state: BackendState; elapsed: number }) {
   const label =
-    state === "ready"
+    state === "Ready"
       ? "Server healthy"
-      : state === "waking"
+      : state === "Waking"
         ? `Waking server (${elapsed}s)`
-        : state === "degraded"
+        : state === "Degraded"
           ? "Server degraded"
           : "Server unavailable";
   return (

@@ -13,6 +13,9 @@ RUN .venv/bin/python -c "import fastapi, uvicorn, psycopg, tiktoken"
 FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/app/.venv/bin:$PATH" PORT=8000 TIKTOKEN_CACHE_DIR=/opt/tiktoken REQUIRE_EXACT_TOKENIZER=true
 RUN addgroup --system app && adduser --system --ingroup app app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /build/.venv /app/.venv
 COPY --from=builder /build/app /app/app

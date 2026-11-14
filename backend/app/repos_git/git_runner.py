@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -119,6 +120,8 @@ class GitRunner:
             )
         if returncode != 0:
             text = stderr.decode("utf-8", "replace").lower()
+            detail = re.sub(r"(https?://)([^\s/@]+):([^\s/@]+)@", r"\1***:***@", text)
+            detail = " ".join(detail.split())[:400]
             if any(
                 x in text
                 for x in (
@@ -135,5 +138,8 @@ class GitRunner:
                 message = "Insufficient disk space for repository"
             else:
                 message = "Git operation failed"
-            raise RepoFetchError(message, details={"retryable": True, "returncode": returncode})
+            raise RepoFetchError(
+                f"{message}: {detail}" if detail else message,
+                details={"retryable": True, "returncode": returncode},
+            )
         return GitResult(stdout, stderr, returncode)

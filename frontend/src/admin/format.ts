@@ -19,13 +19,18 @@ export function lowSample(count: number | undefined) {
 }
 export function isGitHubRepoInput(value: string) {
   const candidate = value.trim().replace(/\/$/, "");
-  if (/^[^/\s]+\/[^/\s]+$/.test(candidate)) return true;
+  const segment = "[A-Za-z0-9_.-]+";
+  if (new RegExp(`^${segment}/${segment}$`).test(candidate)) return true;
   try {
     const url = new URL(candidate);
     return (
       url.protocol === "https:" &&
       url.hostname.toLowerCase() === "github.com" &&
-      url.pathname.split("/").filter(Boolean).length === 2
+      url.pathname.split("/").filter(Boolean).length === 2 &&
+      url.pathname
+        .split("/")
+        .filter(Boolean)
+        .every((part) => new RegExp(`^${segment}$`).test(part))
     );
   } catch {
     return false;

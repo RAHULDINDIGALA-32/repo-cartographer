@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { adminReady, adminRepos, adminStats } from "@/api/admin";
+import { RefreshCw } from "lucide-react";
 import type { AdminStats, Repository } from "@/api/types";
 import { useAdminSession } from "@/admin/session";
 import { compactNumber, duration, integer, lowSample, percent, relative } from "@/admin/format";
@@ -74,8 +75,13 @@ export default function AdminStatsPage() {
             />{" "}
             Auto-refresh
           </label>
-          <button className="meta-action" onClick={() => void load()}>
-            Refresh
+          <button
+            className="text-button"
+            onClick={() => void load()}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <RefreshCw size={14} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>

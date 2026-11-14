@@ -82,7 +82,7 @@ export default function TracePage() {
     : undefined;
   const chunkHref = (id: number) => {
     const chunk = trace.chunks[String(id)];
-    if (!chunk || !snapshot) return undefined;
+    if (!chunk || !snapshot?.url) return undefined;
     return citationLink(
       {
         index: 0,

@@ -217,6 +217,34 @@ button:disabled {
   background: var(--surface-2);
   border-color: var(--border);
 }
+.text-button {
+  display: inline-grid;
+  place-items: center;
+  width: auto;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+}
+.text-button:hover {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+.my-toast {
+  font-size: 13px;
+  border-radius: 10px;
+  padding: 12px;
+}
+.my-toast-title {
+  font-weight: 600;
+}
+.my-toast-description {
+  font-size: 12px;
+  opacity: 0.8;
+}
 .main {
   flex: 1;
   width: 100%;
@@ -399,8 +427,9 @@ button:disabled {
 .meta-chip {
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 2px 12px;
   background: var(--surface);
+  width: auto;
 }
 .meta-chip.fresh {
   background: var(--mint-fill);
@@ -459,6 +488,7 @@ button:disabled {
 .send {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   border: 0;
   border-radius: 8px;
@@ -822,6 +852,7 @@ button:disabled {
   border: 1px solid var(--lavender-border);
   border-radius: 999px;
   padding: 2px 7px;
+  margin-left: 6px;
   color: var(--text-muted);
   font-size: 11px;
   font-weight: 500;
@@ -953,6 +984,24 @@ button:disabled {
 .add-repo label {
   flex: 1 1 320px;
 }
+.add-repo-check {
+  flex: 0 0 auto !important;
+  align-self: end;
+  min-height: 42px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.add-repo-check input {
+  margin: 0;
+}
+.add-repo > .send {
+  align-self: end;
+  min-height: 42px;
+}
+.field-error {
+  color: #be123c;
+  font-size: 12px;
+}
 .admin-list {
   display: grid;
   gap: 10px;
@@ -1005,20 +1054,17 @@ button:disabled {
 .status-ready,
 .status-done {
   border-color: var(--mint-border);
-  background: var(--mint-fill);
   color: var(--text);
 }
 .status-error,
 .status-failed {
   border-color: var(--rose-border);
-  background: var(--rose-fill);
   color: var(--text);
 }
 .status-indexing,
 .status-running,
 .status-pending {
   border-color: var(--lemon-border);
-  background: var(--lemon-fill);
   color: var(--text);
 }
 .job-inline {

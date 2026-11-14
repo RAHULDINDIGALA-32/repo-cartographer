@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
@@ -12,6 +13,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en" suppressHydrationWarning>
       <body>
         <Providers>{children}</Providers>
+        <Toaster
+          position="bottom-right"
+          theme="dark"
+          toastOptions={{
+            classNames: {
+              toast: "my-toast",
+              title: "my-toast-title",
+              description: "my-toast-description",
+            },
+          }}
+        />
       </body>
     </html>
   );
