@@ -1,5 +1,12 @@
 # repo-cartographer frontend
 
+The F4 public landing page is at `/`; the interactive app is at `/app` and
+existing `/r/<repo-id>` links remain valid. The landing page is content-driven,
+includes an offline scripted answer replay, and sends at most one session-scoped
+backend health pre-warm request. GSAP is lazy-loaded after hydration and is
+skipped for reduced-motion users. Set `NEXT_PUBLIC_SITE_URL` for canonical URLs,
+sitemap, robots, and social metadata; `/admin` is excluded from indexing.
+
 The F1/F2 frontend is a client-rendered Next.js App Router application. It calls
 the FastAPI backend directly, including the POST/SSE ask stream; it never puts
 backend credentials in the browser and never proxies ask requests through

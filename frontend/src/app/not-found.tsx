@@ -5,7 +5,7 @@ export default function NotFound() {
     <main className="main empty-state">
       <h1>That page is not available</h1>
       <p>
-        <Link href="/">Return to the repositories</Link>
+        <Link href="/">Return to the landing page</Link>
       </p>
     </main>
   );

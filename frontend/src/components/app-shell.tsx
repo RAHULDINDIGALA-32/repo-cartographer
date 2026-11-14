@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Command } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -45,6 +46,7 @@ export function AppShell({
   initialQuestion?: string;
 }) {
   const backend = useBackendStatus();
+  const pathname = usePathname();
   const reposQuery = useRepos(backend.state === "Ready" || backend.state === "Degraded");
   const [repo, setRepo] = useState<Repository>();
   useEffect(() => {
@@ -58,9 +60,9 @@ export function AppShell({
   useEffect(() => {
     if (repo && typeof window !== "undefined") {
       localStorage.setItem("repo-cartographer.repo", String(repo.id));
-      window.history.replaceState({}, "", `/r/${repo.id}`);
+      if (pathname.startsWith("/r/")) window.history.replaceState({}, "", `/r/${repo.id}`);
     }
-  }, [repo]);
+  }, [pathname, repo]);
   const [settings, setSettings] = useState<FrontendSettings>(defaultSettings);
   const [palette, setPalette] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -119,11 +121,11 @@ export function AppShell({
         <div className="header-inner">
           <Link className="brand" href="/">
             <div className="brand">
-            <span className="brand-mark" aria-hidden>
-              ◈
-            </span>
-            <span className="brand-name">{BRAND_NAME}</span>
-          </div>
+              <span className="brand-mark" aria-hidden>
+                ◈
+              </span>
+              <span className="brand-name">{BRAND_NAME}</span>
+            </div>
           </Link>
           <RepoSelector repos={reposQuery.data ?? []} selected={repo} onSelect={setRepo} />
           <StatusIndicator state={backend.state} elapsed={backend.elapsed} />

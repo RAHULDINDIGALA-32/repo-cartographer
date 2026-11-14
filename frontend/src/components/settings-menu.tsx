@@ -10,7 +10,6 @@ import {
 } from "@/history/settings";
 import { Settings } from "lucide-react";
 
-
 export function SettingsMenu({
   onChange,
   onClear,
@@ -61,7 +60,7 @@ export function SettingsMenu({
         aria-label="Open settings"
         onClick={() => toggle(!open)}
       >
-       <Settings size={16} strokeWidth={1.8} />
+        <Settings size={16} strokeWidth={1.8} />
       </button>
       {open && (
         <div className="settings-menu" role="dialog" aria-label="Settings">

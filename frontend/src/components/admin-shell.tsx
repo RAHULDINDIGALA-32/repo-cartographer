@@ -23,15 +23,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     <div className="admin-shell">
       <header className="header">
         <div className="header-inner">
-          <Link className="brand" href="/">
+          <Link className="brand" href="/app">
             <div className="brand">
-            <span className="brand-mark" aria-hidden>
-              ◈
-            </span>
-            <span className="brand-name">{BRAND_NAME}</span>
-          </div>
+              <span className="brand-mark" aria-hidden>
+                ◈
+              </span>
+              <span className="brand-name">{BRAND_NAME}</span>
+            </div>
           </Link>
-    
+
           <span className="admin-badge">Admin</span>
           <nav className="admin-nav" aria-label="Admin navigation">
             {nav.map(([href, label]) => (
