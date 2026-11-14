@@ -423,7 +423,47 @@ async def query_log(request: Request, query_id: int, _: str = Depends(require_ad
         row = await cur.fetchone()
         if row is None:
             raise NotFoundError("Query log not found")
-        return dict(zip([d.name for d in cur.description], row, strict=True))
+        result = dict(zip([d.name for d in cur.description], row, strict=True))
+        trace = result.get("trace") if isinstance(result.get("trace"), dict) else {}
+        ids: set[int] = set()
+
+        def collect(value):
+            if len(ids) >= 500:
+                return
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    if key in {"id", "chunk_id"} and isinstance(item, int) and item > 0:
+                        ids.add(item)
+                    else:
+                        collect(item)
+            elif isinstance(value, list):
+                for item in value:
+                    collect(item)
+
+        collect(trace)
+        if ids:
+            placeholders = ",".join(["%s"] * len(ids))
+            metadata_cur = await conn.execute(
+                f"SELECT c.id,f.path,c.start_line,c.end_line,c.symbol,c.symbol_type,c.token_count "
+                f"FROM {schema}.chunks c JOIN {schema}.files f ON f.id=c.file_id "
+                f"WHERE c.repo_id=%s AND c.id IN ({placeholders})",
+                (result["repo_id"], *sorted(ids)),
+            )
+            result["chunk_metadata"] = {
+                str(row[0]): {
+                    "id": row[0],
+                    "path": row[1],
+                    "start_line": row[2],
+                    "end_line": row[3],
+                    "symbol": row[4],
+                    "symbol_type": row[5],
+                    "token_count": row[6],
+                }
+                for row in await metadata_cur.fetchall()
+            }
+        else:
+            result["chunk_metadata"] = {}
+        return result
 
 
 def _since(value: str) -> datetime:

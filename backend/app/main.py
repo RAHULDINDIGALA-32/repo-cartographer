@@ -84,6 +84,7 @@ def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None
         app.state.indexer = Indexer(manager, runtime, config)
         app.state.worker = None
         app.state.scheduler = None
+        app.state.worker_started_monotonic = None
         app.state.worker_task = None
         app.state.scheduler_task = None
         if runtime.api_run_worker:
@@ -91,6 +92,7 @@ def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None
             scheduler = Scheduler(manager, runtime)
             app.state.worker = worker
             app.state.scheduler = scheduler
+            app.state.worker_started_monotonic = time.monotonic()
             app.state.worker_task = asyncio.create_task(worker.start())
             app.state.scheduler_task = asyncio.create_task(scheduler.start())
         try:
@@ -205,6 +207,14 @@ def create_app(settings: Settings | None = None, pipeline: PipelineConfig | None
                 "ok": True,
                 "details": health_status.model_dump(mode="json"),
                 "worker_enabled": bool(request.app.state.worker),
+                "worker_reason": (
+                    None if request.app.state.worker else "worker disabled on this deployment"
+                ),
+                "worker_heartbeat_age_seconds": (
+                    round(time.monotonic() - request.app.state.worker_started_monotonic, 1)
+                    if request.app.state.worker_started_monotonic is not None
+                    else None
+                ),
             }
         except Exception as exc:
             raise DatabaseError("Readiness check failed") from exc

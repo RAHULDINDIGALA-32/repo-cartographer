@@ -31,6 +31,65 @@ export type RepoDetail = {
   examples?: string[];
 };
 
+export type AdminJob = {
+  id: number;
+  repo_id: number;
+  type: string;
+  status: string;
+  attempts: number;
+  max_attempts: number;
+  run_after?: string;
+  error?: string | null;
+  error_code?: string | null;
+  trigger?: string;
+  worker_id?: string | null;
+  result?: Record<string, unknown> | null;
+  created_at?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  heartbeat_at?: string | null;
+};
+
+export type AdminQueryRow = {
+  id: number;
+  created_at: string;
+  repo_id: number;
+  question: string;
+  outcome: string;
+  latencies_ms?: Record<string, number>;
+  tokens_in?: number | null;
+  tokens_out?: number | null;
+  citation_check?: Record<string, unknown> | null;
+};
+
+export type AdminStats = {
+  window: string;
+  asks: { total: number; by_outcome: Record<string, number> };
+  latency_ms: Record<string, { p50: number | null; p95: number | null; count: number }>;
+  tokens: { in: number; out: number };
+  citations: {
+    ok: number;
+    uncited: number;
+    invalid: number;
+    normalized: number;
+    compliance_rate: number | null;
+  };
+  degraded: Record<string, number>;
+  feedback: { up: number; down: number };
+  budgets: { ask: BudgetStat; auto_sync: BudgetStat };
+  repos: Array<{
+    id: number;
+    indexed_sha: string | null;
+    indexed_at: string | null;
+    stale: boolean | null;
+    drift_chunks: number | null;
+    last_reuse_ratio: number | null;
+  }>;
+  jobs: { by_status: Record<string, number>; by_trigger: Record<string, number> };
+};
+
+export type BudgetStat = { used: number; limit: number };
+
 export type Citation = {
   index: number;
   chunk_id: number;

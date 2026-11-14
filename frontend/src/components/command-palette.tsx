@@ -109,6 +109,15 @@ export function CommandPalette({
           >
             Export conversation
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = "/admin";
+              onClose();
+            }}
+          >
+            Admin console
+          </button>
         </div>
       </div>
     </div>

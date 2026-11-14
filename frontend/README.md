@@ -60,10 +60,24 @@ stored turns. Share links only prefill a question (`?q=`); they never submit it
 automatically. Completed answers support copy, Markdown copy, export, and
 optimistic thumbs feedback. Reduced-motion CSS is respected.
 
+## F3 admin and observability
+
+Open `/admin` to sign in with the backend `X-API-Key`. The key is held in React
+memory by default; “Remember for this tab” stores it only in `sessionStorage`.
+It is never placed in local storage, URLs, React Query keys, or logs. A 401/403
+clears the session. Admin screens cover repositories and sync actions, bounded
+job polling and savings, stats, query exploration, and tolerant RAG trace
+inspection. Triage tags are local-only and are not submitted to the backend.
+
+The API must allow `X-API-Key` in CORS preflight. The worker banner is based on
+`/ready`: this deployment currently reports whether the in-process worker is
+enabled. If it is disabled, queued syncs require a separately running
+`cartographer worker run` process against the same database.
+
 ## Known limitations
 
-Admin views, server-side history, multi-device sync, and answer regeneration
-remain out of scope. Run the frontend build and Vitest outside OneDrive when
+Server-side history, multi-device sync, and answer regeneration remain out of
+scope. Run the frontend build and Vitest outside OneDrive when
 possible because Windows OneDrive file locking can prevent esbuild from
 accessing its temporary directory; CI is the authoritative clean-environment
 test.

@@ -212,6 +212,11 @@ export function Turn({
           >
             Copy link
           </button>
+          {turn.done?.query_log_id && (
+            <a className="meta-action" href={`/admin/queries/${turn.done.query_log_id}`}>
+              Open trace
+            </a>
+          )}
           <button className="meta-action" type="button" onClick={() => void copyMarkdown()}>
             Copy markdown
           </button>
