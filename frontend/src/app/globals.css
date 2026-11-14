@@ -194,13 +194,13 @@ button:disabled {
   border-radius: 50%;
   background: var(--text-subtle);
 }
-.status-ready .status-dot {
+.status-Ready .status-dot {
   background: #22c55e;
 }
-.status-waking .status-dot {
+.status-Waking .status-dot {
   background: #eab308;
 }
-.status-down .status-dot {
+.status-Down .status-dot {
   background: #ef4444;
 }
 .icon-button {
@@ -1051,19 +1051,19 @@ button:disabled {
   color: var(--text-muted);
   background: var(--surface);
 }
-.status-ready,
-.status-done {
+.status-Ready,
+.status-Done {
   border-color: var(--mint-border);
   color: var(--text);
 }
-.status-error,
-.status-failed {
+.status-Error,
+.status-Failed {
   border-color: var(--rose-border);
   color: var(--text);
 }
-.status-indexing,
-.status-running,
-.status-pending {
+.status-Indexing,
+.status-Running,
+.status-Pending {
   border-color: var(--lemon-border);
   color: var(--text);
 }

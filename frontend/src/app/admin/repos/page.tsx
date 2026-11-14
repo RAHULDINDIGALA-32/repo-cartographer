@@ -123,7 +123,7 @@ export default function AdminReposPage() {
       setMessage("Pinned repositories cannot be deleted without an explicit override.");
       return;
     }
-    const typed = window.prompt(`Type ${repoName(repo.url)} to delete this repository.`);
+    const typed = window.prompt(`Type "${repoName(repo.url)}" to delete this repository.`);
     if (typed !== repoName(repo.url)) return;
     try {
       await deleteRepo(session.key!, repo.id);
