@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useAdminSession } from "@/admin/session";
 import { API_BASE_URL } from "@/api/config";
 import { AdminSignIn } from "./admin-sign-in";
+import { BRAND_NAME } from "@/api/config";
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const session = useAdminSession();
@@ -23,8 +24,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <header className="header">
         <div className="header-inner">
           <Link className="brand" href="/">
-            repo-cartographer <span className="admin-badge">Admin</span>
+            <div className="brand">
+            <span className="brand-mark" aria-hidden>
+              ◈
+            </span>
+            <span className="brand-name">{BRAND_NAME}</span>
+          </div>
           </Link>
+    
+          <span className="admin-badge">Admin</span>
           <nav className="admin-nav" aria-label="Admin navigation">
             {nav.map(([href, label]) => (
               <Link className={pathname.startsWith(href) ? "active" : ""} key={href} href={href}>

@@ -54,7 +54,7 @@ export function RepoSelector({
             />
             {filtered.length ? (
               filtered.map((repo) => {
-                const ready = repo.status === "ready";
+                const ready = repo.status === "Ready";
                 return (
                   <button
                     className="repo-option"

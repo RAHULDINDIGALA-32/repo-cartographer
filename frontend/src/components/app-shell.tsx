@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Command } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -116,12 +117,14 @@ export function AppShell({
       </a>
       <header className="header">
         <div className="header-inner">
-          <div className="brand">
+          <Link className="brand" href="/">
+            <div className="brand">
             <span className="brand-mark" aria-hidden>
               ◈
             </span>
             <span className="brand-name">{BRAND_NAME}</span>
           </div>
+          </Link>
           <RepoSelector repos={reposQuery.data ?? []} selected={repo} onSelect={setRepo} />
           <StatusIndicator state={backend.state} elapsed={backend.elapsed} />
           <SettingsMenu
@@ -242,9 +245,7 @@ export function AppShell({
       </footer>
       {palette && (
         <CommandPalette
-          repos={reposQuery.data ?? []}
           history={ask.turns}
-          onSelectRepo={setRepo}
           onNew={() => ask.hydrate([])}
           onSettings={() => setSettingsOpen(true)}
           onExport={exportConversation}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { clearHistory } from "@/history/store";
 import {
   defaultSettings,
@@ -8,6 +8,8 @@ import {
   saveSettings,
   type FrontendSettings,
 } from "@/history/settings";
+import { Settings } from "lucide-react";
+
 
 export function SettingsMenu({
   onChange,
@@ -21,6 +23,7 @@ export function SettingsMenu({
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [settings, setSettings] = useState(defaultSettings);
   useEffect(() => setSettings(loadSettings()), []);
   useEffect(() => {
@@ -29,6 +32,17 @@ export function SettingsMenu({
       onOpenChange?.(true);
     }
   }, [forceOpen, onOpenChange]);
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !wrapperRef.current?.contains(event.target)) {
+        setOpen(false);
+        onOpenChange?.(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open, onOpenChange]);
   const update = (change: Partial<FrontendSettings>) => {
     const next = { ...settings, ...change };
     setSettings(next);
@@ -40,14 +54,14 @@ export function SettingsMenu({
     onOpenChange?.(next);
   };
   return (
-    <div className="settings-wrap">
+    <div className="settings-wrap" ref={wrapperRef}>
       <button
         className="icon-button"
         type="button"
         aria-label="Open settings"
         onClick={() => toggle(!open)}
       >
-        ⚙
+       <Settings size={16} strokeWidth={1.8} />
       </button>
       {open && (
         <div className="settings-menu" role="dialog" aria-label="Settings">
@@ -76,8 +90,9 @@ export function SettingsMenu({
               onClear();
               toggle(false);
             }}
+            className="text-button"
           >
-            Clear history
+            Clear History
           </button>
         </div>
       )}

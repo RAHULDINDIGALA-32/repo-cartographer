@@ -6,6 +6,6 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development" && !
 
 export const API_BASE_URL = (rawBaseUrl || "http://localhost:8000").replace(/\/$/, "");
 
-export const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME || "repo-cartographer";
+export const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME || "Repo Cartographer";
 
 export const MAX_QUESTION_CHARS = 16_000;

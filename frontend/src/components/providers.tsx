@@ -13,7 +13,20 @@ export function Providers({ children }: Readonly<{ children: React.ReactNode }>)
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <QueryClientProvider client={client}>
         {children}
-        <Toaster richColors />
+        <Toaster
+          position="bottom-right"
+          theme="system"
+          duration={2200}
+          closeButton={false}
+          icons={{ success: null, info: null, warning: null, error: null, loading: null }}
+          toastOptions={{
+            classNames: {
+              toast: "app-toast",
+              title: "app-toast-title",
+              description: "app-toast-description",
+            },
+          }}
+        />
       </QueryClientProvider>
     </ThemeProvider>
   );

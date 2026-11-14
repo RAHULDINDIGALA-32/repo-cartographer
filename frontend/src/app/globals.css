@@ -233,15 +233,26 @@ button:disabled {
   border-color: var(--border);
   color: var(--text);
 }
-.my-toast {
+.app-toast {
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: min(320px, calc(100vw - 32px)) !important;
+  background: #000 !important;
+  color: #fff !important;
+  border: 1px solid #000 !important;
   font-size: 13px;
   border-radius: 10px;
-  padding: 12px;
+  padding: 9px 12px !important;
 }
-.my-toast-title {
+.dark .app-toast {
+  background: #fff !important;
+  color: #000 !important;
+  border-color: #fff !important;
+}
+.app-toast-title {
   font-weight: 600;
 }
-.my-toast-description {
+.app-toast-description {
   font-size: 12px;
   opacity: 0.8;
 }
@@ -773,8 +784,8 @@ button:disabled {
 }
 .settings-menu {
   position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
+  right: 5;
+  top: calc(100% + 24px);
   width: min(300px, calc(100vw - 28px));
   display: grid;
   gap: 11px;
@@ -789,7 +800,11 @@ button:disabled {
 .settings-menu label {
   display: flex;
   gap: 8px;
-  align-items: flex-start;
+  align-items: center;
+}
+.settings-menu label input {
+  flex: 0 0 auto;
+  margin: 0;
 }
 .settings-menu p {
   color: var(--text-muted);
@@ -826,22 +841,58 @@ button:disabled {
   color: var(--text);
   padding: 11px;
 }
-.palette-results {
+.palette-tabs {
   display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin-top: 7px;
+  border-bottom: 1px solid var(--border);
+}
+.palette-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-subtle);
+  padding: 9px 10px 8px;
+  font-size: 12px;
+}
+.palette-tabs button.active {
+  border-bottom-color: var(--text);
+  color: var(--text);
+}
+.palette-section,
+.palette-search-results {
+  display: grid;
+  align-content: start;
   gap: 2px;
   max-height: 55vh;
   overflow: auto;
   padding-top: 7px;
 }
-.palette-results button {
+.palette-search-results h2 {
+  color: var(--text-subtle);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  margin: 5px 10px;
+  text-transform: uppercase;
+}
+.palette-empty {
+  color: var(--text-subtle);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+.palette-section button,
+.palette-search-results button {
   border: 0;
   border-radius: 7px;
   background: transparent;
   color: var(--text);
-  padding: 10px;
+  min-width: 0;
   text-align: left;
+  padding: 10px;
 }
-.palette-results button:hover {
+.palette-section button:hover,
+.palette-search-results button:hover {
   background: var(--surface-2);
 }
 .palette-history span {
