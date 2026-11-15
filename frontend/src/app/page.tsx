@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LandingPage } from "@/components/landing-page";
 
 export const metadata: Metadata = {
-  title: "Ask your codebase. Verify every answer.",
+  title: { absolute: "Repo Cartographer · Ask your codebase" },
   description: "Cited, commit-pinned answers from public GitHub repositories.",
   alternates: { canonical: "/" },
   openGraph: {

@@ -54,18 +54,16 @@ export function RepoSelector({
             />
             {filtered.length ? (
               filtered.map((repo) => {
-                const ready = repo.status === "Ready";
+                const ready = repo.status === "ready";
                 return (
                   <button
                     className="repo-option"
                     type="button"
                     key={repo.id}
-                    aria-disabled={!ready}
+                    aria-pressed={selected?.id === repo.id}
                     onClick={() => {
-                      if (ready) {
-                        onSelect(repo);
-                        setOpen(false);
-                      }
+                      onSelect(repo);
+                      setOpen(false);
                     }}
                     title={ready ? undefined : "This repository is not ready yet"}
                   >
@@ -76,7 +74,9 @@ export function RepoSelector({
                         {repo.indexed_sha?.slice(0, 7) ?? "—"} · {age(repo.indexed_at)}
                       </small>
                     </span>
-                    <small>{repo.status}</small>
+                    <small className={ready ? "repo-status-ready" : "repo-status-muted"}>
+                      {repo.status}
+                    </small>
                   </button>
                 );
               })

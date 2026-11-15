@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
-  title: "App | Repo Cartographer",
+  title: { absolute: "Repo Cartographer · App" },
   description: "Ask grounded questions about a public GitHub repository.",
   alternates: { canonical: "/app" },
 };

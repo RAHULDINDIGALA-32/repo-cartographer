@@ -496,11 +496,20 @@ button:disabled {
   color: var(--text);
 }
 .repo-option:hover,
-.repo-option[aria-selected="true"] {
+.repo-option[aria-pressed="true"] {
   background: var(--surface-2);
 }
-.repo-option[aria-disabled="true"] {
-  color: var(--text-subtle);
+.repo-option strong {
+  color: var(--text);
+}
+.repo-option small {
+  color: var(--text-muted);
+}
+.repo-option .repo-status-ready {
+  color: var(--mint-border);
+}
+.repo-option .repo-status-muted {
+  color: var(--text-muted);
 }
 .status {
   display: inline-flex;
@@ -516,13 +525,13 @@ button:disabled {
   border-radius: 50%;
   background: var(--text-subtle);
 }
-.status-Ready .status-dot {
+.status-ready .status-dot {
   background: #22c55e;
 }
-.status-Waking .status-dot {
+.status-raking .status-dot {
   background: #eab308;
 }
-.status-Down .status-dot {
+.status-down .status-dot {
   background: #ef4444;
 }
 .icon-button {
@@ -1141,6 +1150,26 @@ button:disabled {
   color: var(--text);
   padding: 5px 8px;
 }
+.settings-confirm {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.settings-confirm p {
+  margin: 0 0 6px;
+  color: var(--text);
+}
+.settings-confirm > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.danger-button {
+  color: #b91c1c;
+}
+.notice-inline {
+  color: var(--text-muted);
+}
 .palette-backdrop {
   align-items: flex-start;
   justify-content: center;
@@ -1424,19 +1453,19 @@ button:disabled {
   color: var(--text-muted);
   background: var(--surface);
 }
-.status-Ready,
-.status-Done {
+.status-ready,
+.status-done {
   border-color: var(--mint-border);
   color: var(--text);
 }
-.status-Error,
-.status-Failed {
+.status-error,
+.status-failed {
   border-color: var(--rose-border);
   color: var(--text);
 }
-.status-Indexing,
-.status-Running,
-.status-Pending {
+.status-indexing,
+.status-running,
+.status-pending {
   border-color: var(--lemon-border);
   color: var(--text);
 }

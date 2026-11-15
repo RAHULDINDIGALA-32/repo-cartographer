@@ -1,4 +1,4 @@
-export type RepoStatus = "Ready" | "Indexing" | "Error" | string;
+export type RepoStatus = "ready" | "indexing" | "error" | string;
 
 export type Repository = {
   id: number;
@@ -192,4 +192,4 @@ export class ApiError extends Error {
   }
 }
 
-export type BackendState = "Waking" | "Ready" | "Degraded" | "Down";
+export type BackendState = "waking" | "ready" | "degraded" | "down";

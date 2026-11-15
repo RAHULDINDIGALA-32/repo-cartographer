@@ -7,7 +7,7 @@ import { Command } from "lucide-react";
 import dynamic from "next/dynamic";
 import { BRAND_NAME } from "@/api/config";
 import type { Repository } from "@/api/types";
-import { useAsk } from "@/hooks/use-ask";
+import { useAsk, type Turn as AskTurn } from "@/hooks/use-ask";
 import { useBackendStatus } from "@/hooks/use-backend-status";
 import { useRepos } from "@/hooks/use-repos";
 import { loadHistory, saveTurn } from "@/history/store";
@@ -33,9 +33,9 @@ const SettingsMenu = dynamic(
 );
 
 function selectStored(repos: Repository[]) {
-  if (typeof window === "undefined") return repos.find((repo) => repo.status === "Ready");
+  if (typeof window === "undefined") return repos.find((repo) => repo.status === "ready");
   const stored = Number(localStorage.getItem("repo-cartographer.repo"));
-  return repos.find((repo) => repo.id === stored) ?? repos.find((repo) => repo.status === "Ready");
+  return repos.find((repo) => repo.id === stored) ?? repos.find((repo) => repo.status === "ready");
 }
 
 export function AppShell({
@@ -47,8 +47,9 @@ export function AppShell({
 }) {
   const backend = useBackendStatus();
   const pathname = usePathname();
-  const reposQuery = useRepos(backend.state === "Ready" || backend.state === "Degraded");
+  const reposQuery = useRepos(backend.state === "ready" || backend.state === "degraded");
   const [repo, setRepo] = useState<Repository>();
+  const [history, setHistory] = useState<AskTurn[]>([]);
   useEffect(() => {
     if (reposQuery.data?.length) {
       const selected = requestedRepoId
@@ -76,12 +77,19 @@ export function AppShell({
   const { hydrate } = ask;
   useEffect(() => {
     setSettings(loadSettings());
-    void loadHistory().then((history) => hydrate(history));
+    void loadHistory().then((stored) => {
+      setHistory(stored);
+      hydrate(stored);
+    });
   }, [hydrate]);
   useEffect(() => {
     if (!settings.saveHistory) return;
-    for (const turn of ask.turns)
-      if (turn.state === "complete" || turn.state === "stopped") void saveTurn(turn);
+    for (const turn of ask.turns) {
+      if (turn.state === "complete" || turn.state === "stopped") {
+        setHistory((current) => [...current.filter((item) => item.id !== turn.id), turn]);
+        void saveTurn(turn);
+      }
+    }
   }, [ask.turns, settings.saveHistory]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -136,7 +144,10 @@ export function AppShell({
               setSettings(next);
               saveSettings(next);
             }}
-            onClear={() => ask.hydrate([])}
+            onClear={() => {
+              setHistory([]);
+              ask.hydrate([]);
+            }}
           />
           <button
             className="icon-button"
@@ -150,7 +161,7 @@ export function AppShell({
         </div>
       </header>
       <main className="main" id="main-content">
-        {backend.state === "Waking" && (
+        {backend.state === "waking" && (
           <div className="wake-card" role="status">
             <strong>Waking up the server</strong>
             <br />
@@ -159,7 +170,7 @@ export function AppShell({
             {backend.elapsed > 0 && <small>{backend.elapsed}s elapsed</small>}
           </div>
         )}
-        {backend.state === "Down" && (
+        {backend.state === "down" && (
           <div className="notice" role="alert">
             <strong>The server is unavailable.</strong>
             <br />
@@ -169,12 +180,12 @@ export function AppShell({
             </button>
           </div>
         )}
-        {backend.state === "Ready" && reposQuery.isLoading && (
+        {backend.state === "ready" && reposQuery.isLoading && (
           <div className="empty-state">
             <h1>Loading repositories…</h1>
           </div>
         )}
-        {backend.state === "Ready" && reposQuery.isError && (
+        {backend.state === "ready" && reposQuery.isError && (
           <div className="notice" role="alert">
             Could not load repositories.{" "}
             <button type="button" onClick={() => void reposQuery.refetch()}>
@@ -184,11 +195,20 @@ export function AppShell({
         )}
         {repo && (
           <div className="empty-state">
-            <h1>Ask anything about this codebase</h1>
+            <h1>
+              {repo.status === "ready"
+                ? "Ask anything about this codebase"
+                : "Repository is not ready yet"}
+            </h1>
             <p>
               <span className="mono">{repo.url.replace(/^https?:\/\/github\.com\//, "")}</span> ·
               indexed <span className="mono">{repo.indexed_sha?.slice(0, 7) ?? "unknown"}</span>
             </p>
+            {repo.status !== "ready" && (
+              <p className="notice-inline">
+                Status: {repo.status}. Asking will be enabled after indexing completes.
+              </p>
+            )}
             {!ask.turns.length && examples.length > 0 && (
               <div className="chips" aria-label="Example questions">
                 {examples.map((question) => (
@@ -208,7 +228,7 @@ export function AppShell({
             )}
           </div>
         )}
-        {!repo && backend.state === "Ready" && !reposQuery.isLoading && (
+        {!repo && backend.state === "ready" && !reposQuery.isLoading && (
           <div className="empty-state">
             <h1>No ready repositories</h1>
             <p>An administrator must index a public repository before you can ask questions.</p>
@@ -236,7 +256,7 @@ export function AppShell({
         <Composer
           key={prefill}
           initialValue={prefill}
-          disabled={backend.state !== "Ready" || !repo}
+          disabled={backend.state !== "ready" || !repo || repo.status !== "ready"}
           active={ask.active}
           onAsk={send}
           onStop={ask.stop}
@@ -247,7 +267,7 @@ export function AppShell({
       </footer>
       {palette && (
         <CommandPalette
-          history={ask.turns}
+          history={history}
           onNew={() => ask.hydrate([])}
           onSettings={() => setSettingsOpen(true)}
           onExport={exportConversation}

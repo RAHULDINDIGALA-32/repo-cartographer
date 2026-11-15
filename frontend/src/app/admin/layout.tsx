@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AdminSessionProvider } from "@/admin/session";
 
 export const metadata: Metadata = {
-  title: "Admin · repo-cartographer",
+  title: { absolute: "Repo Cartographer · Admin" },
   robots: { index: false, follow: false },
 };
 

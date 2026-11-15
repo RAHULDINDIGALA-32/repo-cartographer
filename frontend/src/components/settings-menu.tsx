@@ -22,6 +22,7 @@ export function SettingsMenu({
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [settings, setSettings] = useState(defaultSettings);
   useEffect(() => setSettings(loadSettings()), []);
@@ -50,6 +51,7 @@ export function SettingsMenu({
   };
   const toggle = (next: boolean) => {
     setOpen(next);
+    if (!next) setConfirmClear(false);
     onOpenChange?.(next);
   };
   return (
@@ -82,17 +84,34 @@ export function SettingsMenu({
             Show retrieval details
           </label>
           <p>History stays on this device. It is never sent to the backend.</p>
-          <button
-            type="button"
-            onClick={() => {
-              void clearHistory();
-              onClear();
-              toggle(false);
-            }}
-            className="text-button"
-          >
+          <button type="button" onClick={() => setConfirmClear(true)} className="text-button">
             Clear History
           </button>
+          {confirmClear && (
+            <div className="settings-confirm" role="alertdialog" aria-label="Confirm clear history">
+              <p>Clear all saved history from this device?</p>
+              <div>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => setConfirmClear(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="text-button danger-button"
+                  onClick={() => {
+                    void clearHistory();
+                    onClear();
+                    toggle(false);
+                  }}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
