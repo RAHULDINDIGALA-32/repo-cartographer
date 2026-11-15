@@ -16,23 +16,48 @@ export function LandingMotion() {
       gsap.registerPlugin(ScrollTrigger);
       const context = gsap.context(() => {
         gsap.fromTo(
-          ".hero-copy > *",
-          { y: 12, opacity: 0.7 },
-          { y: 0, opacity: 1, duration: 0.6, stagger: 0.07, ease: "power2.out" },
+          ".hero-reveal",
+          { y: 14, opacity: 0.72 },
+          { y: 0, opacity: 1, duration: 0.62, stagger: 0.08, ease: "power2.out" },
         );
+
         gsap.utils.toArray<HTMLElement>(".landing-section").forEach((section) => {
+          const targets = section.querySelectorAll(
+            ".step-card, .feature-card, .check-list li, .arch-readout",
+          );
+          if (!targets.length) return;
           gsap.fromTo(
-            section,
-            { y: 16, opacity: 0.82 },
+            targets,
+            { y: 16, opacity: 0.8 },
             {
               y: 0,
               opacity: 1,
-              duration: 0.55,
+              duration: 0.48,
+              stagger: 0.05,
               ease: "power2.out",
-              scrollTrigger: { trigger: section, start: "top 86%", once: true },
+              scrollTrigger: { trigger: section, start: "top 84%", once: true },
             },
           );
         });
+
+        const pipeline = document.querySelector(".pipeline");
+        const progress = document.querySelector(".pipeline-progress");
+        if (pipeline && progress) {
+          gsap.fromTo(
+            progress,
+            { scaleX: 0 },
+            {
+              scaleX: 1,
+              ease: "none",
+              scrollTrigger: {
+                trigger: pipeline,
+                start: "top 75%",
+                end: "bottom 55%",
+                scrub: 0.4,
+              },
+            },
+          );
+        }
       });
       cleanup = () => {
         context.revert();
@@ -42,8 +67,13 @@ export function LandingMotion() {
     const idle = hasIdleCallback
       ? window.requestIdleCallback(start)
       : window.setTimeout(start, 250);
+    const onLoad = () => {
+      void import("gsap/ScrollTrigger").then(({ ScrollTrigger }) => ScrollTrigger.refresh());
+    };
+    window.addEventListener("load", onLoad);
     return () => {
       disposed = true;
+      window.removeEventListener("load", onLoad);
       if (hasIdleCallback) window.cancelIdleCallback(idle as number);
       else window.clearTimeout(idle as number);
       cleanup();

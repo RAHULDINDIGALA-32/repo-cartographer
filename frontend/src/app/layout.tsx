@@ -19,6 +19,13 @@ export const metadata: Metadata = {
     title: "Repo Cartographer",
     description: "Code questions, with receipts.",
   },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      
+    ],
+    apple: [{ url: "/apple-icon", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

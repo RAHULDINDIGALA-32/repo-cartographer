@@ -29,7 +29,66 @@ export const landingContent = {
     ["1,387", "chunks produced from a pinned 218-file Flask repository"],
     ["21/22", "answerable Flask questions with the right file in dense top-5"],
   ],
-  stack: ["FastAPI", "Postgres + pgvector", "Hybrid retrieval", "Provider gateway", "Next.js"],
+  architecture: {
+    eyebrow: "System architecture",
+    title: "One store. Two tracks. A gateway in between.",
+    readout:
+      "A Postgres-backed RAG service: jobs keep public GitHub indexes fresh; questions take a parallel retrieval path; answers stream with citations.",
+    index: [
+      {
+        id: "github",
+        title: "Public GitHub",
+        text: "Default-branch shallow clone. Files are hashed, never executed.",
+      },
+      {
+        id: "jobs",
+        title: "Job queue",
+        text: "Postgres row locks, coalescing, and one running job per repository.",
+      },
+      {
+        id: "ingest",
+        title: "Chunk & embed",
+        text: "AST chunks, identifier-split search text, embedding reuse by content hash.",
+      },
+      {
+        id: "writer",
+        title: "IndexWriter",
+        text: "Writes chunks first, then files, then indexed_sha last.",
+      },
+    ],
+    ask: [
+      {
+        id: "ui",
+        title: "Ask UI",
+        text: "Next.js client. Streamed SSE answers, citations, history on-device.",
+      },
+      {
+        id: "analyze",
+        title: "Query analyzer",
+        text: "Rewrite, identifiers, and path hints before retrieval.",
+      },
+      {
+        id: "retrieve",
+        title: "Hybrid retrieve",
+        text: "Dense + sparse + symbols, fused with RRF, then reranked.",
+      },
+      {
+        id: "generate",
+        title: "Grounded answer",
+        text: "Cited generation from assembled blocks. Refuse without evidence.",
+      },
+    ],
+    spine: {
+      id: "postgres",
+      title: "PostgreSQL",
+      text: "repos, files, chunks (pgvector + FTS), jobs, query_logs — one datastore.",
+    },
+    bus: {
+      id: "gateway",
+      title: "Provider gateway",
+      text: "Voyage embed/rerank and LLM adapters, with retries, budgets, and stats.",
+    },
+  },
 } as const;
 
 export const demoAnswer = {
@@ -42,3 +101,16 @@ export const demoAnswer = {
     { path: "src/flask/sansio/app.py", lines: "L605–L635", label: "URL matching" },
   ],
 } as const;
+
+export const metricValues = [
+  { count: 55, format: "plain" as const, suffix: "" },
+  { count: 4268, format: "comma" as const, suffix: "" },
+  { count: 1387, format: "comma" as const, suffix: "" },
+  { count: 21, format: "plain" as const, suffix: "/22" },
+];
+
+export function formatMetricValue(metric: (typeof metricValues)[number], value = metric.count) {
+  const rounded = Math.round(value);
+  const core = metric.format === "comma" ? rounded.toLocaleString("en-US") : String(rounded);
+  return `${core}${metric.suffix}`;
+}
