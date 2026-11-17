@@ -147,7 +147,11 @@ export function LandingPage({ hasHistory: initialHasHistory }: { hasHistory?: bo
                     {primaryLabel}
                   </Link>
                 </motion.div>
-                <a className="button button-secondary" href="#how-it-works" onClick={goTo("how-it-works")}>
+                <a
+                  className="button button-secondary"
+                  href="#how-it-works"
+                  onClick={goTo("how-it-works")}
+                >
                   See how it works
                 </a>
               </div>
@@ -171,7 +175,10 @@ export function LandingPage({ hasHistory: initialHasHistory }: { hasHistory?: bo
               </div>
               <div className="step-grid">
                 {landingContent.steps.map((step, index) => (
-                  <article className={`step-card step-${index + 1} pipeline-stage`} key={step.label}>
+                  <article
+                    className={`step-card step-${index + 1} pipeline-stage`}
+                    key={step.label}
+                  >
                     <span className="step-number">0{index + 1}</span>
                     <h3>{step.label}</h3>
                     <p>{step.text}</p>

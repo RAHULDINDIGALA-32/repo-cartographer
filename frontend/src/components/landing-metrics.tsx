@@ -100,17 +100,15 @@ export function LandingMetrics() {
             if (!metric) return null;
             const selected = focus === index;
             return (
-              <article
-                className={selected && active ? "is-focused" : undefined}
-                key={value}
-              >
+              <article className={selected && active ? "is-focused" : undefined} key={value}>
                 <button
                   className="metric-hit"
                   type="button"
                   onClick={() => {
                     setPinned(true);
                     setFocus(index);
-                    const el = sectionRef.current?.querySelectorAll<HTMLElement>(".metric-value")[index];
+                    const el =
+                      sectionRef.current?.querySelectorAll<HTMLElement>(".metric-value")[index];
                     if (el) countUp(el, metric);
                   }}
                 >

@@ -20,10 +20,7 @@ export const metadata: Metadata = {
     description: "Code questions, with receipts.",
   },
   icons: {
-    icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      
-    ],
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/apple-icon", type: "image/png" }],
   },
 };
