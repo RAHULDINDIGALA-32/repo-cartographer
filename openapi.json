@@ -1,0 +1,247 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "repo-cartographer",
+    "version": "1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Liveness"
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Readiness"
+          }
+        }
+      }
+    },
+    "/v1/repos": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Public or admin repository list"
+          }
+        }
+      },
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Repository registered"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/repos/{repo_id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repository detail"
+          }
+        }
+      },
+      "delete": {
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repository deleted"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/repos/{repo_id}/ask": {
+      "post": {
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE answer"
+          }
+        }
+      }
+    },
+    "/v1/repos/{repo_id}/sync": {
+      "post": {
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sync queued"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/repos/{repo_id}/jobs": {
+      "get": {
+        "parameters": [
+          {
+            "name": "repo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Repository jobs"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/feedback": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "Feedback accepted"
+          }
+        }
+      }
+    },
+    "/v1/queries/{query_id}": {
+      "get": {
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Query trace"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/admin/stats": {
+      "get": {
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ]
+            }
+          },
+          {
+            "name": "repo_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregate operational statistics"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/admin/queries": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated query explorer"
+          }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    }
+  }
+}
